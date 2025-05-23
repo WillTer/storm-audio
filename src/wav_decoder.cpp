@@ -1,13 +1,93 @@
 #include "wav_decoder.h"
 
-#include <vector>
 #include <cstring>
-
-#include <SDL2/SDL_audio.h>
+#include <vector>
 
 #include "format_helpers.h"
 
 using namespace storm;
+
+namespace
+{
+
+struct RiffChunk {
+    char     riff[4];  // "RIFF"
+    uint32_t file_size;
+    char     file_type[4];  // Should be "WAVE" for wav-files
+};
+
+struct FormatChunk {
+    char     id[4];             // "fmt "
+    uint32_t size;              // Size of format chunk
+    uint16_t audio_format;      // 1 for PCM
+    uint16_t channels;          //
+    uint32_t sample_rate;       //
+    uint32_t bytes_per_second;  // (sample_rate * channels * bit_per_sample) / 8
+    uint16_t block_align;       // Size of one sample (including all channels)
+    uint16_t bits_per_sample;   // Number of bits represents each sample
+};
+
+struct AnyChunk {
+    char     id[4];
+    uint32_t size;
+};
+
+struct WavFileData {
+    uint16_t             channels;
+    uint32_t             sample_rate;
+    uint16_t             bits_per_sample;
+    std::vector<uint8_t> pcm_data;
+};
+
+template <typename T>
+size_t read_chunk(std::vector<uint8_t> const& mem, size_t const offset, T& chunk)
+{
+    std::memcpy(&chunk, mem.data() + offset, sizeof(chunk));
+    return sizeof(chunk);
+}
+
+bool is_id_equals(std::string_view const& id, std::string_view const& expected)
+{
+    if (expected.size() < 4 || id.size() < 4) { return false; }
+
+    return id[0] == expected[0] && id[1] == expected[1] && id[2] == expected[2] && id[3] == expected[3];
+}
+
+bool parse_wave_file(std::vector<uint8_t> const& mem, WavFileData& output_data)
+{
+    size_t               offset     = 0;
+    std::vector<uint8_t> audio_data = {};
+
+    RiffChunk riff_chunk = {};
+    offset += read_chunk(mem, offset, riff_chunk);
+    if (!is_id_equals(riff_chunk.riff, "RIFF") || !is_id_equals(riff_chunk.file_type, "WAVE")) { return false; }
+
+    FormatChunk format_chunk = {};
+    offset += read_chunk(mem, offset, format_chunk);
+    if (!is_id_equals(format_chunk.id, "fmt ")) { return false; }
+
+    output_data.channels        = format_chunk.channels;
+    output_data.sample_rate     = format_chunk.sample_rate;
+    output_data.bits_per_sample = format_chunk.bits_per_sample;
+
+    while (offset < mem.size()) {
+        AnyChunk chunk = {};
+        offset += read_chunk(mem, offset, chunk);
+
+        if (is_id_equals(chunk.id, "data") && mem.size() >= (offset + chunk.size)) {
+            output_data.pcm_data = std::vector<uint8_t>(mem.data() + offset, mem.data() + offset + chunk.size);
+
+            // No need to read any other chunks
+            return true;
+        }
+
+        offset += chunk.size;
+    }
+
+    return false;
+}
+
+}  // namespace
 
 struct WavDecoder::Impl {
     Impl() : m_is_valid {false}, m_channels {0}, m_sample_rate {0}, m_format {Format::Unknown}, m_sample_size {1}, m_offset {0} {}
@@ -15,23 +95,18 @@ struct WavDecoder::Impl {
 
     bool load_memory(std::vector<uint8_t> const& mem)
     {
-        SDL_AudioSpec audio_spec = {};
+        WavFileData file_data = {};
 
-        Uint8* pcm_buffer      = nullptr;
-        Uint32 pcm_buffer_size = 0;
-        if (SDL_LoadWAV_RW(
-                SDL_RWFromConstMem(mem.data(), static_cast<int>(mem.size())), SDL_FALSE, &audio_spec, &pcm_buffer, &pcm_buffer_size)
-            == nullptr) {
-            return false;
+        if (!parse_wave_file(mem, file_data)) {
+            return false;  // Invalid WAVE-file
         }
 
-        m_data        = std::vector<uint8_t>(pcm_buffer, pcm_buffer + pcm_buffer_size);
-        m_channels    = audio_spec.channels;
-        m_sample_rate = audio_spec.freq;
-        m_format      = convert_from_sdl_format(audio_spec.format);
-        m_sample_size = get_format_sample_size(m_format);
+        m_data        = std::move(file_data.pcm_data);
+        m_channels    = file_data.channels;
+        m_sample_rate = file_data.sample_rate;
+        m_format      = get_compatible_format(file_data.bits_per_sample);
+        m_sample_size = file_data.bits_per_sample / 8;
 
-        SDL_FreeWAV(pcm_buffer);
         m_is_valid = true;
 
         return true;

@@ -2,42 +2,20 @@
 
 #include <AL/al.h>
 #include <AL/alext.h>
-#include <SDL2/SDL_audio.h>
 #include <storm_audio/data_stream.h>
 
 namespace storm
 {
 
-constexpr SDL_AudioFormat convert_to_sdl_format(IDataStream::Format const format)
+constexpr IDataStream::Format get_compatible_format(uint16_t bits_per_sample)
 {
-    switch (format) {
-    case IDataStream::Format::Unknown: return 0;
-    case IDataStream::Format::Int8: return AUDIO_S8;
-    case IDataStream::Format::UInt8: return AUDIO_U8;
-    case IDataStream::Format::Int16: return AUDIO_S16;
-    case IDataStream::Format::UInt16: return AUDIO_U16;
-    case IDataStream::Format::Int32: return AUDIO_S32;
-    case IDataStream::Format::Float32: return AUDIO_F32;
+    switch (bits_per_sample) {
+    case 8: return IDataStream::Format::UInt8;
+    case 16: return IDataStream::Format::Int16;
+    case 32: return IDataStream::Format::Float32;
     }
 
-    return 0;
-}
-
-constexpr SDL_AudioFormat convert_to_sdl_format_compatible(IDataStream::Format const format)
-{
-    switch (format) {
-    case IDataStream::Format::Unknown: return 0;
-    case IDataStream::Format::Int8: [[fallthrough]];
-    case IDataStream::Format::UInt8: return AUDIO_U8;  // OpenAL always read 8-bit data as unsigned
-    case IDataStream::Format::Int16: [[fallthrough]];
-    case IDataStream::Format::UInt16: return AUDIO_S16;  // OpenAL always read 16-bit data as signed
-    case IDataStream::Format::Int32: [[fallthrough]];    // OpenAL supports 32-bit data only in float format (and only with extension)
-    case IDataStream::Format::Float32:
-        if (alIsExtensionPresent("AL_EXT_float32") == AL_TRUE) { return AUDIO_F32; }
-        return AUDIO_S16;  // Fallback to 16-bit if 32-bit is not supported
-    }
-
-    return 0;
+    return IDataStream::Format::Unknown;
 }
 
 constexpr IDataStream::Format convert_format_compatible(IDataStream::Format const format)
@@ -52,20 +30,6 @@ constexpr IDataStream::Format convert_format_compatible(IDataStream::Format cons
     case IDataStream::Format::Float32:
         if (alIsExtensionPresent("AL_EXT_float32") == AL_TRUE) { return IDataStream::Format::Float32; }
         return IDataStream::Format::Int16;  // Fallback to 16-bit if 32-bit is not supported
-    }
-
-    return IDataStream::Format::Unknown;
-}
-
-constexpr IDataStream::Format convert_from_sdl_format(SDL_AudioFormat const format)
-{
-    switch (format) {
-    case AUDIO_S8: return IDataStream::Format::Int8;
-    case AUDIO_S16: return IDataStream::Format::Int16;
-    case AUDIO_S32: return IDataStream::Format::Int32;
-    case AUDIO_U8: return IDataStream::Format::UInt8;
-    case AUDIO_U16: return IDataStream::Format::UInt16;
-    case AUDIO_F32: return IDataStream::Format::Float32;
     }
 
     return IDataStream::Format::Unknown;

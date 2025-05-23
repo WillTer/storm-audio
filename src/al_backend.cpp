@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <map>
 #include <vector>
 
@@ -107,7 +108,7 @@ struct ALBackend::Impl {
             channel = *free_channel;
             channel->unbind_sound();
         } else {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Add new channel, current channels count: %zd", m_channels.size());
+            printf("Add new channel, current channels count: %zd", m_channels.size());  // FIXME
             channel = std::make_shared<ALChannel>();
             m_channels.push_back(channel);
         }
