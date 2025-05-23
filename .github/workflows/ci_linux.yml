@@ -1,0 +1,62 @@
+name: Ubuntu 22.04
+
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - 'tools/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'tools/**'
+      - '*.md'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          # skip concurrent jobs if they are on the same thing
+          concurrent_skipping: 'same_content'
+          # never skip PR, release or manual/scheduled runs
+          do_not_skip: '["pull_request", "release", "workflow_dispatch", "schedule"]'
+
+  build-linux:
+    needs: pre_job
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug]
+    name: 'Ubuntu 22.04 [${{ matrix.configuration}}]'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Install libs
+      run: |
+        sudo apt-get update && sudo apt-get install clang-15 libsdl2-dev libvorbis-dev libogg-dev
+    - name: Configure with CMake
+      run: |
+        export CC=clang-15
+        export CXX=clang++-15
+        ${CXX} --version
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.configuration}} -S . -B build/${{ matrix.configuration }}
+    - name: Build
+      run: cmake --build build/${{ matrix.configuration }}
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: storm-engine.linux.${{ matrix.configuration }}
+        path: |
+          build/${{ matrix.configuration }}/test
+          !build/${{ matrix.configuration }}/test/CMakeFiles
+          !build/${{ matrix.configuration }}/test/cmake_install.cmake
+
+permissions: write-all
