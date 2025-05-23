@@ -14,7 +14,7 @@
 #include "al_channel.h"
 #include "al_sound.h"
 #include "al_utils.h"
-#include "format_helpers.h"
+#include "const.h"
 #include "wav_decoder.h"
 
 using namespace storm;
@@ -69,8 +69,7 @@ struct ALBackend::Impl {
         alcMakeContextCurrent(m_context);
         ALC_TRACE_ERRORS(m_device);
 
-        // TODO: use device format
-        m_out_format = convert_format_compatible(IDataStream::Format::Float32);
+        m_out_format = (alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) ? IDataStream::Format::Float32 : IDataStream::Format::Int16;
 
         m_is_initialized = true;
         return true;

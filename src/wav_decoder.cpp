@@ -3,7 +3,9 @@
 #include <cstring>
 #include <vector>
 
-#include "format_helpers.h"
+#include <AL/al.h>
+
+#include "const.h"
 
 using namespace storm;
 
@@ -33,9 +35,11 @@ struct AnyChunk {
 };
 
 struct WavFileData {
-    uint16_t             channels;
-    uint32_t             sample_rate;
-    uint16_t             bits_per_sample;
+    uint16_t audio_format;
+    uint16_t channels;
+    uint32_t sample_rate;
+    uint16_t bits_per_sample;
+
     std::vector<uint8_t> pcm_data;
 };
 
@@ -66,6 +70,7 @@ bool parse_wave_file(std::vector<uint8_t> const& mem, WavFileData& output_data)
     offset += read_chunk(mem, offset, format_chunk);
     if (!is_id_equals(format_chunk.id, "fmt ")) { return false; }
 
+    output_data.audio_format    = format_chunk.audio_format;
     output_data.channels        = format_chunk.channels;
     output_data.sample_rate     = format_chunk.sample_rate;
     output_data.bits_per_sample = format_chunk.bits_per_sample;
@@ -101,10 +106,20 @@ struct WavDecoder::Impl {
             return false;  // Invalid WAVE-file
         }
 
+        // 1 - PCM, 3 - IEEE Float 32
+        if (file_data.audio_format == 1 && file_data.bits_per_sample == 8) {
+            m_format = IDataStream::Format::Int8;
+        } else if (file_data.audio_format == 1 && file_data.bits_per_sample == 16) {
+            m_format = IDataStream::Format::Int16;
+        } else if (file_data.audio_format == 3 && file_data.bits_per_sample == 32 && alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) {
+            m_format = IDataStream::Format::Float32;
+        } else {
+            return false;  // Unsupported format
+        }
+
         m_data        = std::move(file_data.pcm_data);
         m_channels    = file_data.channels;
         m_sample_rate = file_data.sample_rate;
-        m_format      = get_compatible_format(file_data.bits_per_sample);
         m_sample_size = file_data.bits_per_sample / 8;
 
         m_is_valid = true;
