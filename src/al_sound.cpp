@@ -1,6 +1,6 @@
 #include "al_sound.h"
 
-#include <alext.h>
+#include <algorithm>
 
 #include "al_utils.h"
 #include "const.h"

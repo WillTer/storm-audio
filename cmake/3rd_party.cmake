@@ -33,20 +33,21 @@ FetchContent_Declare(
 if (WIN32)
     FetchContent_MakeAvailable(SDL2 libogg libvorbis openal)
 elseif(LINUX)
+    include(FindPkgConfig)
     # On Linux use package manager
     find_package(SDL2 REQUIRED)
-    find_package(OGG REQUIRED)
-    find_package(VORBIS REQUIRED)
-    find_package(OpenAL REQUIRED)
+    pkg_check_modules(OGG REQUIRED ogg)
+    pkg_check_modules(VORBIS REQUIRED vorbis)
+    pkg_check_modules(OPENAL REQUIRED openal)
 endif()
 
 add_library(storm-audio-deps INTERFACE)
 target_link_libraries(storm-audio-deps
     INTERFACE
         $<$<PLATFORM_ID:Windows>:SDL2::SDL2 Ogg::ogg Vorbis::vorbisfile OpenAL>
-        $<$<PLATFORM_ID:Linux>:${SDL2_LIBRARIES} ${OGG_LIBRARIES} ${VORBIS_LIBRARIES} ${OpenAL_LIBRARIES}>
+        $<$<PLATFORM_ID:Linux>:${SDL2_LIBRARIES} ${OGG_LIBRARIES} ${VORBIS_LIBRARIES} ${OPENAL_LIBRARIES}>
 )
 target_include_directories(storm-audio-deps
     INTERFACE
-        $<$<PLATFORM_ID:Linux>:${SDL2_INCLUDE_DIRS} ${OGG_INCLUDE_DIRS} ${VORBIS_INCLUDE_DIRS} ${OpenAL_INCLUDE_DIRS}>
+        $<$<PLATFORM_ID:Linux>:${SDL2_INCLUDE_DIRS} ${OGG_INCLUDE_DIRS} ${VORBIS_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIRS}>
 )

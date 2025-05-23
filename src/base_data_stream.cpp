@@ -1,6 +1,7 @@
 #include "base_data_stream.h"
 
 #include <fstream>
+#include <iterator>
 #include <vector>
 
 using namespace storm;

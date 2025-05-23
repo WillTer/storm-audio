@@ -1,6 +1,7 @@
 #include "wav_decoder.h"
 
 #include <vector>
+#include <cstring>
 
 #include <SDL2/SDL_audio.h>
 
