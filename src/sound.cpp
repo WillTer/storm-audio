@@ -15,7 +15,7 @@ struct Sound::Impl {
         , m_stream {std::move(stream)}
         , m_flags {flags}
     {
-        m_buffers.resize(has_flag(flags, Stream) ? STREAM_BUFFER_COUNT : 1);
+        m_buffers.resize(is_flag_enabled(flags, Flags::Stream) ? STREAM_BUFFER_COUNT : 1);
 
         alGenBuffers(static_cast<int>(m_buffers.size()), m_buffers.data());
         AL_TRACE_ERRORS(m_tracer);
@@ -39,7 +39,7 @@ struct Sound::Impl {
 
     void attach_buffers(unsigned source)
     {
-        if (has_flag(m_flags, Stream)) {
+        if (is_flag_enabled(m_flags, Flags::Stream)) {
             alSourceQueueBuffers(source, static_cast<int>(m_buffers.size()), m_buffers.data());
         } else {
             alSourcei(source, AL_BUFFER, m_buffers[0]);
@@ -104,7 +104,7 @@ struct Sound::Impl {
 
         m_stream->seek_start();
 
-        if (has_flag(m_flags, Stream)) {
+        if (is_flag_enabled(m_flags, Flags::Stream)) {
             prepare_buffer_data_stream();
         } else {
             prepare_buffer_data();

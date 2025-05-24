@@ -157,7 +157,7 @@ struct Channel::Impl {
             return;
         }
 
-        if (has_flag(m_sound->get_flags(), Sound::Stream)) {
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
             alSourcei(m_source, AL_LOOPING, AL_FALSE);
         } else {
             alSourcei(m_source, AL_LOOPING, flag ? AL_TRUE : AL_FALSE);
@@ -171,7 +171,7 @@ struct Channel::Impl {
         this->m_sound = sound;
         sound->attach_buffers(m_source);
 
-        if (has_flag(sound->get_flags(), Sound::Stereo2D) && sound->get_channels() == 1) {
+        if (is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D) && sound->get_channels() == 1) {
             alSourcei(m_source, AL_SOURCE_RELATIVE, AL_TRUE);
             AL_TRACE_ERRORS(m_tracer);
 
@@ -203,7 +203,7 @@ struct Channel::Impl {
         ChannelState const state = get_state();
         if (state == ChannelState::Paused || state == ChannelState::Initial) { return; }
 
-        if (has_flag(m_sound->get_flags(), Sound::Stream)) { update_stream(); }
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { update_stream(); }
     }
 
     void update_stream() const

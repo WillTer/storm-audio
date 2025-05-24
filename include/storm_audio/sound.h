@@ -1,11 +1,11 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <type_traits>
 
 #include "abstract_data_stream.h"
 #include "debug_tracer.h"
+#include "enum_flags.h"
 
 namespace storm::audio
 {
@@ -13,7 +13,7 @@ namespace storm::audio
 class Sound final
 {
 public:
-    enum Flags : uint8_t {
+    enum class Flags {
         None      = 0,
         Stream    = 1 << 0,
         Stereo2D  = 1 << 1,
@@ -40,11 +40,13 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-template <typename T>
-    requires std::is_enum_v<T>
-static constexpr bool has_flag(T flags, T flag)
-{
-    return (static_cast<uint64_t>(flags) & static_cast<uint64_t>(flag)) == static_cast<uint64_t>(flag);
-}
-
 }  // namespace storm::audio
+
+namespace type_traits
+{
+
+template <>
+struct is_flag<storm::audio::Sound::Flags>: std::true_type {
+};
+
+}  // namespace type_traits

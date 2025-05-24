@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     std::vector<Channel*> channels = {};
 
     for (int i = 1; i < argc; ++i) {
-        auto const flags = static_cast<Sound::Flags>(i == 1 ? Sound::Flags::Stereo2D | Sound::Flags::Stream : Sound::Flags::Stereo2D);
+        auto const flags = i == 1 ? Sound::Flags::Stereo2D | Sound::Flags::Stream : Sound::Flags::Stereo2D;
         auto       sound = backend->create_sound(argv[i], flags);
 
         auto* channel = backend->attach_sound(sound);
