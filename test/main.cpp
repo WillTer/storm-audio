@@ -2,9 +2,31 @@
 #include <cstdio>
 #include <thread>
 
-#include <storm_audio/audio_backend.h>
+#include <storm_audio/backend.h>
 
-using namespace storm;
+using namespace storm::audio;
+
+class Tracer: public DebugTracer
+{
+public:
+    void trace_message(
+        Severity                     severity,
+        std::string const&           message,
+        std::filesystem::path const& source_file,
+        size_t                       line,
+        std::string const&           function_name) override
+    {
+#define PRINTF_MESSAGE(severity_text) \
+    printf("[" #severity_text "][%s:%zd][%s] %s\n", source_file.filename().string().c_str(), line, function_name.c_str(), message.c_str())
+
+        switch (severity) {
+        case DebugTracer::Severity::Trace: PRINTF_MESSAGE(TRACE); break;
+        case DebugTracer::Severity::Info: PRINTF_MESSAGE(INFO); break;
+        case DebugTracer::Severity::Warn: PRINTF_MESSAGE(WARN); break;
+        case DebugTracer::Severity::Error: PRINTF_MESSAGE(ERROR); break;
+        }
+    }
+};
 
 int main(int argc, char** argv)
 {
@@ -13,8 +35,10 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    auto                       backend  = std::make_unique<AudioBackend>();
-    std::vector<AudioChannel*> channels = {};
+    auto tracer  = std::make_shared<Tracer>();
+    auto backend = std::make_unique<Backend>(tracer);
+
+    std::vector<Channel*> channels = {};
 
     for (int i = 1; i < argc; ++i) {
         auto const flags = static_cast<Sound::Flags>(i == 1 ? Sound::Flags::Stereo2D | Sound::Flags::Stream : Sound::Flags::Stereo2D);

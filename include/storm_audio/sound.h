@@ -4,11 +4,10 @@
 #include <memory>
 #include <type_traits>
 
-#include <complex.h>
-
 #include "abstract_data_stream.h"
+#include "debug_tracer.h"
 
-namespace storm
+namespace storm::audio
 {
 
 class Sound final
@@ -21,20 +20,20 @@ public:
         Spatial3D = 1 << 2,
     };
 
-    Sound(std::unique_ptr<AbstractDataStream>&& stream, Flags flags);
+    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<AbstractDataStream>&& stream, Flags flags);
     ~Sound();
 
     Flags get_flags() const;
 
 private:
-    friend class AudioChannel;
+    friend class Channel;
 
-    void bind_buffers_to_source(unsigned source);
-    void unbind_source(unsigned source);
+    void attach_buffers(unsigned source);
+    void detach_buffers(unsigned source);
 
     int get_channels() const;
 
-    bool push_next_data(unsigned buffer, bool is_looping) const;
+    bool update_buffer(unsigned buffer, bool is_looping);
     void reset_buffers();
 
     struct Impl;
@@ -48,4 +47,4 @@ static constexpr bool has_flag(T flags, T flag)
     return (static_cast<uint64_t>(flags) & static_cast<uint64_t>(flag)) == static_cast<uint64_t>(flag);
 }
 
-}  // namespace storm
+}  // namespace storm::audio

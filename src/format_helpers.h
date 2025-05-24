@@ -4,7 +4,7 @@
 #include <AL/alext.h>
 #include <storm_audio/abstract_data_stream.h>
 
-namespace storm
+namespace storm::audio
 {
 
 constexpr ALenum convert_to_al_format(AbstractDataStream::Format const format, int const channels)
@@ -35,4 +35,4 @@ constexpr size_t get_format_sample_size(AbstractDataStream::Format const format)
     return 0;
 }
 
-}  // namespace storm
+}  // namespace storm::audio

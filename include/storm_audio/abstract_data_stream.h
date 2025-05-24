@@ -4,7 +4,9 @@
 #include <filesystem>
 #include <vector>
 
-namespace storm
+#include "result.h"
+
+namespace storm::audio
 {
 
 class AbstractDataStream
@@ -19,9 +21,8 @@ public:
 
     virtual ~AbstractDataStream() = default;
 
-    virtual bool load_file(std::filesystem::path const& file_path);
-
-    virtual bool load_memory(std::vector<uint8_t> const& mem)      = 0;
+    virtual Result load_file(std::filesystem::path const& file_path);
+    virtual Result load_memory(std::vector<uint8_t> const& mem) = 0;
 
     virtual bool is_valid() = 0;
 
@@ -36,4 +37,4 @@ public:
     virtual void seek_start() = 0;
 };
 
-}  // namespace storm
+}  // namespace storm::audio

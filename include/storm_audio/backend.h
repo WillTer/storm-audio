@@ -4,21 +4,22 @@
 #include <memory>
 
 #include "abstract_data_stream.h"
-#include "audio_channel.h"
+#include "channel.h"
+#include "debug_tracer.h"
 #include "sound.h"
 
-namespace storm
+namespace storm::audio
 {
 
-class AudioBackend final
+class Backend final
 {
 public:
-    AudioBackend();
-    ~AudioBackend();
+    Backend(std::shared_ptr<DebugTracer> const& tracer);
+    ~Backend();
 
     std::shared_ptr<Sound> create_sound(std::filesystem::path const& file_path, Sound::Flags flags);
 
-    AudioChannel* attach_sound(std::shared_ptr<Sound> const& sound);
+    Channel* attach_sound(std::shared_ptr<Sound> const& sound);
 
     void set_listener_position_3d(std::array<float, 3> const& position);
     void set_listener_velocity_3d(std::array<float, 3> const& velocity);
@@ -31,4 +32,4 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-}  // namespace storm
+}  // namespace storm::audio

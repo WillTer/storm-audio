@@ -7,7 +7,7 @@
 
 #include "const.h"
 
-using namespace storm;
+using namespace storm::audio;
 
 namespace
 {
@@ -98,12 +98,12 @@ struct WavDecoder::Impl {
     Impl() : m_is_valid {false}, m_channels {0}, m_sample_rate {0}, m_format {Format::Unknown}, m_sample_size {1}, m_offset {0} {}
     ~Impl() = default;
 
-    bool load_memory(std::vector<uint8_t> const& mem)
+    Result load_memory(std::vector<uint8_t> const& mem)
     {
         WavFileData file_data = {};
 
         if (!parse_wave_file(mem, file_data)) {
-            return false;  // Invalid WAVE-file
+            return Result::ErrFileFormatInvalid;  // Invalid WAVE-file
         }
 
         // 1 - PCM, 3 - IEEE Float 32
@@ -114,7 +114,7 @@ struct WavDecoder::Impl {
         } else if (file_data.audio_format == 3 && file_data.bits_per_sample == 32 && alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) {
             m_format = AbstractDataStream::Format::Float32;
         } else {
-            return false;  // Unsupported format
+            return Result::ErrFileFormatNotSupported;  // Unsupported format
         }
 
         m_data        = std::move(file_data.pcm_data);
@@ -124,7 +124,7 @@ struct WavDecoder::Impl {
 
         m_is_valid = true;
 
-        return true;
+        return Result::Ok;
     }
 
     size_t get_samples(std::vector<uint8_t>& buffer, size_t sample_count)
@@ -169,7 +169,7 @@ WavDecoder::WavDecoder() : m_impl {std::make_unique<Impl>()} {}
 
 WavDecoder::~WavDecoder() = default;
 
-bool WavDecoder::load_memory(std::vector<uint8_t> const& mem)
+Result WavDecoder::load_memory(std::vector<uint8_t> const& mem)
 {
     return m_impl->load_memory(mem);
 }

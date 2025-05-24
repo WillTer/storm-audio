@@ -4,7 +4,7 @@
 
 #include <storm_audio/abstract_data_stream.h>
 
-namespace storm
+namespace storm::audio
 {
 
 class WavDecoder: virtual public AbstractDataStream
@@ -13,7 +13,7 @@ public:
     WavDecoder();
     ~WavDecoder() override;
 
-    bool load_memory(std::vector<uint8_t> const& mem) override;
+    Result load_memory(std::vector<uint8_t> const& mem) override;
 
     bool is_valid() override;
 
@@ -32,4 +32,4 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-}  // namespace storm
+}  // namespace storm::audio
