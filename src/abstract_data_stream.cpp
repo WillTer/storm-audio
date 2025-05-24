@@ -1,4 +1,4 @@
-#include "base_data_stream.h"
+#include <storm_audio/abstract_data_stream.h>
 
 #include <fstream>
 #include <iterator>
@@ -6,11 +6,7 @@
 
 using namespace storm;
 
-BaseDataStream::BaseDataStream() = default;
-
-BaseDataStream::~BaseDataStream() = default;
-
-bool BaseDataStream::load_file(std::filesystem::path const& file_path)
+bool AbstractDataStream::load_file(std::filesystem::path const& file_path)
 {
     auto file = std::ifstream(file_path, std::ios::binary);
     if (!file) { return false; }

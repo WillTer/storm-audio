@@ -2,12 +2,12 @@
 
 #include <memory>
 
-#include <base_data_stream.h>
+#include <storm_audio/abstract_data_stream.h>
 
 namespace storm
 {
 
-class WavDecoder: virtual public BaseDataStream
+class WavDecoder: virtual public AbstractDataStream
 {
 public:
     WavDecoder();

@@ -1,11 +1,14 @@
-#include "al_channel.h"
 
-#include "al_sound.h"
+#include <algorithm>
+
+#include <storm_audio/audio_channel.h>
+#include <storm_audio/sound.h>
+
 #include "al_utils.h"
 
 using namespace storm;
 
-struct ALChannel::Impl {
+struct AudioChannel::Impl {
     Impl() : m_is_looping {false}
     {
         alGenSources(1, &m_source);
@@ -66,6 +69,7 @@ struct ALChannel::Impl {
         case AL_PLAYING: state = ChannelState::Playing; break;
         case AL_PAUSED: state = ChannelState::Paused; break;
         case AL_STOPPED: state = ChannelState::Stopped; break;
+        case AL_INITIAL: state = ChannelState::Initial; break;
         default: state = ChannelState::None; break;
         }
 
@@ -101,7 +105,7 @@ struct ALChannel::Impl {
 
     Result set_position_3d(std::array<float, 3> const& position) const
     {
-        alSource3f(m_source, AL_POSITION, position[0], position[1], -position[2]);
+        alSourcefv(m_source, AL_POSITION, position.data());
         AL_TRACE_ERRORS();
 
         return Result::Ok;
@@ -109,7 +113,7 @@ struct ALChannel::Impl {
 
     Result set_velocity_3d(std::array<float, 3> const& velocity) const
     {
-        alSource3f(m_source, AL_VELOCITY, velocity[0], velocity[1], -velocity[2]);
+        alSourcefv(m_source, AL_VELOCITY, velocity.data());
         AL_TRACE_ERRORS();
 
         return Result::Ok;
@@ -117,7 +121,7 @@ struct ALChannel::Impl {
 
     Result set_direction_3d(std::array<float, 3> const& direction) const
     {
-        alSource3f(m_source, AL_DIRECTION, direction[0], direction[1], -direction[2]);
+        alSourcefv(m_source, AL_DIRECTION, direction.data());
         AL_TRACE_ERRORS();
 
         return Result::Ok;
@@ -125,7 +129,7 @@ struct ALChannel::Impl {
 
     Result set_volume(float volume_level) const
     {
-        alSourcef(m_source, AL_GAIN, volume_level);
+        alSourcef(m_source, AL_GAIN, std::clamp(volume_level, 0.0F, 1.0F));
         AL_TRACE_ERRORS();
 
         return Result::Ok;
@@ -141,7 +145,7 @@ struct ALChannel::Impl {
 
     Result set_pitch(float pitch_level) const
     {
-        alSourcef(m_source, AL_PITCH, pitch_level);
+        alSourcef(m_source, AL_PITCH, std::clamp(pitch_level, 0.0F, 1.0F));
         AL_TRACE_ERRORS();
 
         return Result::Ok;
@@ -158,17 +162,24 @@ struct ALChannel::Impl {
     Result set_looping(bool flag)
     {
         m_is_looping = flag;
-        if (m_sound) { m_sound->set_looping(m_source, flag); }
+        if (!m_sound) { return Result::Ok; }
+
+        if (has_flag(m_sound->get_flags(), Sound::Stream)) {
+            alSourcei(m_source, AL_LOOPING, AL_FALSE);
+        } else {
+            alSourcei(m_source, AL_LOOPING, flag ? AL_TRUE : AL_FALSE);
+        }
+        AL_TRACE_ERRORS();
 
         return Result::Ok;
     }
 
-    Result bind_sound(std::shared_ptr<ALSound> const& sound)
+    Result attach_sound(std::shared_ptr<Sound> const& sound)
     {
         this->m_sound = sound;
-        sound->bind_buffers_to_source(m_source, m_is_looping);
+        sound->bind_buffers_to_source(m_source);
 
-        if (has_flag(sound->get_flags(), ISound::Stereo2D) && sound->get_channels() == 1) {
+        if (has_flag(sound->get_flags(), Sound::Stereo2D) && sound->get_channels() == 1) {
             alSourcei(m_source, AL_SOURCE_RELATIVE, AL_TRUE);
             AL_TRACE_ERRORS();
 
@@ -204,9 +215,9 @@ struct ALChannel::Impl {
         ChannelState state = {};
         get_state(state);
 
-        if (state == ChannelState::Paused) { return; }
+        if (state == ChannelState::Paused || state == ChannelState::Initial) { return; }
 
-        if (has_flag(m_sound->get_flags(), ISound::Stream)) { update_stream(); }
+        if (has_flag(m_sound->get_flags(), Sound::Stream)) { update_stream(); }
     }
 
     void update_stream() const
@@ -230,104 +241,103 @@ struct ALChannel::Impl {
     unsigned m_source;
     bool     m_is_looping;
 
-    std::shared_ptr<ALSound> m_sound;
+    std::shared_ptr<Sound> m_sound;
 };
 
-ALChannel::ALChannel() : m_impl {std::make_unique<Impl>()} {}
+AudioChannel::AudioChannel() : m_impl {std::make_unique<Impl>()} {}
+AudioChannel::~AudioChannel() = default;
 
-ALChannel::~ALChannel() = default;
-
-Result ALChannel::play()
+Result AudioChannel::play()
 {
     return m_impl->play();
 }
 
-Result ALChannel::pause()
+Result AudioChannel::pause()
 {
     return m_impl->pause();
 }
 
-Result ALChannel::stop()
+Result AudioChannel::stop()
 {
     return m_impl->stop();
 }
 
-Result ALChannel::get_state(ChannelState& state) const
+Result AudioChannel::get_state(ChannelState& state) const
 {
     return m_impl->get_state(state);
 }
 
-Result ALChannel::set_playback_position(std::chrono::milliseconds const& pos)
+Result AudioChannel::set_playback_position(std::chrono::milliseconds const& pos)
 {
     return m_impl->set_playback_position(pos);
 }
 
-Result ALChannel::get_playback_position(std::chrono::milliseconds& pos) const
+Result AudioChannel::get_playback_position(std::chrono::milliseconds& pos) const
 {
     return m_impl->get_playback_position(pos);
 }
 
-Result ALChannel::set_min_distance(float distance)
+Result AudioChannel::set_min_distance(float distance)
 {
     return m_impl->set_min_distance(distance);
 }
 
-Result ALChannel::set_max_distance(float distance)
+Result AudioChannel::set_max_distance(float distance)
 {
     return m_impl->set_max_distance(distance);
 }
 
-Result ALChannel::set_position_3d(std::array<float, 3> const& position)
+Result AudioChannel::set_position_3d(std::array<float, 3> const& position)
 {
     return m_impl->set_position_3d(position);
 }
 
-Result ALChannel::set_velocity_3d(std::array<float, 3> const& velocity)
+Result AudioChannel::set_velocity_3d(std::array<float, 3> const& velocity)
 {
     return m_impl->set_velocity_3d(velocity);
 }
 
-Result ALChannel::set_direction_3d(std::array<float, 3> const& orientation)
+Result AudioChannel::set_direction_3d(std::array<float, 3> const& orientation)
 {
     return m_impl->set_direction_3d(orientation);
 }
 
-Result ALChannel::set_volume(float volume_level)
+Result AudioChannel::set_volume(float volume_level)
 {
     return m_impl->set_volume(volume_level);
 }
 
-Result ALChannel::get_volume(float& volume_level)
+Result AudioChannel::get_volume(float& volume_level)
 {
     return m_impl->get_volume(volume_level);
 }
 
-Result ALChannel::set_pitch(float pitch_level)
+Result AudioChannel::set_pitch(float pitch_level)
 {
     return m_impl->set_pitch(pitch_level);
 }
 
-Result ALChannel::get_pitch(float& pitch_level)
+Result AudioChannel::get_pitch(float& pitch_level)
 {
     return m_impl->get_pitch(pitch_level);
 }
 
-Result ALChannel::set_looping(bool flag)
+Result AudioChannel::set_looping(bool flag)
 {
     return m_impl->set_looping(flag);
 }
 
-Result ALChannel::bind_sound(std::shared_ptr<ALSound> const& sound)
+Result AudioChannel::attach_sound(std::shared_ptr<Sound> const& sound)
 {
-    return m_impl->bind_sound(sound);
+    return m_impl->attach_sound(sound);
 }
 
-Result ALChannel::unbind_sound()
+Result AudioChannel::unbind_sound()
 {
     return m_impl->unbind_sound();
 }
 
-void ALChannel::internal_update()
+void AudioChannel::internal_update()
 {
     m_impl->internal_update();
 }

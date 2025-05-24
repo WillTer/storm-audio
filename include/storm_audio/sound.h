@@ -1,12 +1,17 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <type_traits>
+
+#include <complex.h>
+
+#include "abstract_data_stream.h"
 
 namespace storm
 {
 
-class ISound
+class Sound final
 {
 public:
     enum Flags : uint8_t {
@@ -16,9 +21,24 @@ public:
         Spatial3D = 1 << 2,
     };
 
-    virtual ~ISound() = default;
+    Sound(std::unique_ptr<AbstractDataStream>&& stream, Flags flags);
+    ~Sound();
 
-    virtual Flags get_flags() const = 0;
+    Flags get_flags() const;
+
+private:
+    friend class AudioChannel;
+
+    void bind_buffers_to_source(unsigned source);
+    void unbind_source(unsigned source);
+
+    int get_channels() const;
+
+    bool push_next_data(unsigned buffer, bool is_looping) const;
+    void reset_buffers();
+
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
 };
 
 template <typename T>

@@ -108,11 +108,11 @@ struct WavDecoder::Impl {
 
         // 1 - PCM, 3 - IEEE Float 32
         if (file_data.audio_format == 1 && file_data.bits_per_sample == 8) {
-            m_format = IDataStream::Format::Int8;
+            m_format = AbstractDataStream::Format::Int8;
         } else if (file_data.audio_format == 1 && file_data.bits_per_sample == 16) {
-            m_format = IDataStream::Format::Int16;
+            m_format = AbstractDataStream::Format::Int16;
         } else if (file_data.audio_format == 3 && file_data.bits_per_sample == 32 && alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) {
-            m_format = IDataStream::Format::Float32;
+            m_format = AbstractDataStream::Format::Float32;
         } else {
             return false;  // Unsupported format
         }
@@ -189,7 +189,7 @@ int WavDecoder::get_sample_rate() const
     return m_impl->m_sample_rate;
 }
 
-IDataStream::Format WavDecoder::get_data_format() const
+AbstractDataStream::Format WavDecoder::get_data_format() const
 {
     return m_impl->m_format;
 }

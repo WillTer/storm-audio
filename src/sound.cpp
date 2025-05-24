@@ -1,4 +1,5 @@
-#include "al_sound.h"
+
+#include <storm_audio/sound.h>
 
 #include <algorithm>
 
@@ -8,17 +9,10 @@
 
 using namespace storm;
 
-namespace
-{
-
-constexpr size_t STREAM_BUFFER_COUNT = 2;
-
-}  // namespace
-
-struct ALSound::Impl {
-    Impl(std::unique_ptr<IDataStream>&& stream, Flags flags) : m_stream {std::move(stream)}, m_flags {flags}
+struct Sound::Impl {
+    Impl(std::unique_ptr<AbstractDataStream>&& stream, Flags flags) : m_stream {std::move(stream)}, m_flags {flags}
     {
-        m_buffers.resize(has_flag(flags, ISound::Stream) ? STREAM_BUFFER_COUNT : 1);
+        m_buffers.resize(has_flag(flags, Stream) ? STREAM_BUFFER_COUNT : 1);
 
         alGenBuffers(static_cast<int>(m_buffers.size()), m_buffers.data());
         AL_TRACE_ERRORS();
@@ -40,11 +34,9 @@ struct ALSound::Impl {
         AL_TRACE_ERRORS();
     }
 
-    void bind_buffers_to_source(unsigned source, bool looping)
+    void bind_buffers_to_source(unsigned source)
     {
-        set_looping(source, looping);
-
-        if (has_flag(m_flags, ISound::Stream)) {
+        if (has_flag(m_flags, Stream)) {
             alSourceQueueBuffers(source, static_cast<int>(m_buffers.size()), m_buffers.data());
         } else {
             alSourcei(source, AL_BUFFER, m_buffers[0]);
@@ -64,16 +56,6 @@ struct ALSound::Impl {
         AL_TRACE_ERRORS();
 
         m_binded_sources.erase(it);
-    }
-
-    void set_looping(unsigned source, bool looping) const
-    {
-        if (has_flag(m_flags, ISound::Stream)) {
-            alSourcei(source, AL_LOOPING, AL_FALSE);
-        } else {
-            alSourcei(source, AL_LOOPING, looping ? AL_TRUE : AL_FALSE);
-        }
-        AL_TRACE_ERRORS();
     }
 
     void bind_buffer_data()
@@ -119,7 +101,7 @@ struct ALSound::Impl {
 
         m_stream->seek_start();
 
-        if (has_flag(m_flags, ISound::Stream)) {
+        if (has_flag(m_flags, Stream)) {
             bind_buffer_data_stream();
         } else {
             bind_buffer_data();
@@ -140,10 +122,10 @@ struct ALSound::Impl {
         m_binded_sources.clear();
     }
 
-    std::unique_ptr<IDataStream> m_stream;
+    std::unique_ptr<AbstractDataStream> m_stream;
 
     Flags               m_flags;
-    IDataStream::Format m_data_format;
+    AbstractDataStream::Format m_data_format;
 
     ALenum m_al_format;
     int    m_channels;
@@ -157,41 +139,35 @@ struct ALSound::Impl {
     std::vector<unsigned> m_binded_sources;
 };
 
-ALSound::ALSound(std::unique_ptr<IDataStream>&& stream, ISound::Flags flags) : m_impl {std::make_unique<Impl>(std::move(stream), flags)} {}
+Sound::Sound(std::unique_ptr<AbstractDataStream>&& stream, Flags flags) : m_impl {std::make_unique<Impl>(std::move(stream), flags)} {}
+Sound::~Sound() = default;
 
-ALSound::~ALSound() = default;
-
-void ALSound::bind_buffers_to_source(unsigned source, bool is_looping)
+void Sound::bind_buffers_to_source(unsigned source)
 {
-    m_impl->bind_buffers_to_source(source, is_looping);
+    m_impl->bind_buffers_to_source(source);
 }
 
-void ALSound::unbind_source(unsigned source)
+void Sound::unbind_source(unsigned source)
 {
     m_impl->unbind_source(source);
 }
 
-void ALSound::set_looping(unsigned source, bool is_looping)
-{
-    m_impl->set_looping(source, is_looping);
-}
-
-int ALSound::get_channels() const
+int Sound::get_channels() const
 {
     return m_impl->m_channels;
 }
 
-bool ALSound::push_next_data(unsigned buffer, bool is_looping) const
+bool Sound::push_next_data(unsigned buffer, bool is_looping) const
 {
     return m_impl->fetch_samples_for_buffer(buffer, is_looping);
 }
 
-void ALSound::reset_buffers()
+void Sound::reset_buffers()
 {
     m_impl->reset_buffers();
 }
 
-ISound::Flags ALSound::get_flags() const
+Sound::Flags Sound::get_flags() const
 {
     return m_impl->m_flags;
 }

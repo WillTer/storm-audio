@@ -7,7 +7,7 @@
 namespace storm
 {
 
-class IDataStream
+class AbstractDataStream
 {
 public:
     enum class Format {
@@ -17,9 +17,10 @@ public:
         Float32,
     };
 
-    virtual ~IDataStream() = default;
+    virtual ~AbstractDataStream() = default;
 
-    virtual bool load_file(std::filesystem::path const& file_path) = 0;
+    virtual bool load_file(std::filesystem::path const& file_path);
+
     virtual bool load_memory(std::vector<uint8_t> const& mem)      = 0;
 
     virtual bool is_valid() = 0;
@@ -27,7 +28,7 @@ public:
     virtual int get_channels() const    = 0;
     virtual int get_sample_rate() const = 0;
 
-    virtual IDataStream::Format get_data_format() const = 0;
+    virtual Format get_data_format() const = 0;
 
     virtual size_t get_samples(std::vector<uint8_t>& buffer, size_t sample_count) = 0;
     virtual size_t get_samples_all(std::vector<uint8_t>& buffer)                  = 0;

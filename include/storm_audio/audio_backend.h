@@ -1,35 +1,34 @@
 #pragma once
 
-#include <array>
 #include <filesystem>
 #include <memory>
 
-#include "channel.h"
-#include "data_stream.h"
+#include "abstract_data_stream.h"
+#include "audio_channel.h"
 #include "sound.h"
 
 namespace storm
 {
 
-class IAudioBackend
+class AudioBackend final
 {
 public:
-    static std::unique_ptr<IAudioBackend> create_backend();
+    AudioBackend();
+    ~AudioBackend();
 
-    virtual ~IAudioBackend() = default;
+    std::shared_ptr<Sound> create_sound(std::filesystem::path const& file_path, Sound::Flags flags);
 
-    virtual bool init() = 0;
+    AudioChannel* attach_sound(std::shared_ptr<Sound> const& sound);
 
-    virtual std::shared_ptr<ISound> create_sound(std::filesystem::path const& file_path, ISound::Flags flags) = 0;
+    void set_listener_position_3d(std::array<float, 3> const& position);
+    void set_listener_velocity_3d(std::array<float, 3> const& velocity);
+    void set_listener_orientation_3d(std::array<float, 6> const& orientation);
 
-    virtual std::weak_ptr<IChannel> bind_sound_to_empty_channel(std::shared_ptr<ISound> const& sound) = 0;
-    virtual void                    release_channel(std::weak_ptr<IChannel> const& channel)           = 0;
+    void update();
 
-    virtual void set_listener_position_3d(std::array<float, 3> const& position)       = 0;
-    virtual void set_listener_velocity_3d(std::array<float, 3> const& velocity)       = 0;
-    virtual void set_listener_orientation_3d(std::array<float, 6> const& orientation) = 0;
-
-    virtual void update() = 0;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
 };
 
 }  // namespace storm
