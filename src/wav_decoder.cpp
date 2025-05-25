@@ -70,6 +70,12 @@ bool parse_wave_file(std::vector<char> const& mem, WavFileData& output_data)
     offset += read_chunk(mem, offset, format_chunk);
     if (!is_id_equals(format_chunk.id, "fmt ")) { return false; }
 
+    constexpr size_t format_expected_size = sizeof(FormatChunk) - sizeof(format_chunk.id) - sizeof(format_chunk.size);
+    if (format_chunk.size > format_expected_size) {
+        // Skip unnecessary information
+        offset += format_chunk.size - format_expected_size;
+    }
+
     output_data.audio_format    = format_chunk.audio_format;
     output_data.channels        = format_chunk.channels;
     output_data.sample_rate     = format_chunk.sample_rate;
