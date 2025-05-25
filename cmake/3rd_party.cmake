@@ -29,7 +29,7 @@ elseif(LINUX)
     include(FindPkgConfig)
     # On Linux use package manager
     pkg_check_modules(OGG REQUIRED ogg)
-    pkg_check_modules(VORBIS REQUIRED vorbis)
+    pkg_check_modules(VORBISFILE REQUIRED vorbisfile)
     pkg_check_modules(OPENAL REQUIRED openal)
 endif()
 
@@ -37,9 +37,9 @@ add_library(storm-audio-deps INTERFACE)
 target_link_libraries(storm-audio-deps
     INTERFACE
         $<$<PLATFORM_ID:Windows>:Ogg::ogg Vorbis::vorbisfile OpenAL>
-        $<$<PLATFORM_ID:Linux>:${OGG_LIBRARIES} ${VORBIS_LIBRARIES} ${OPENAL_LIBRARIES}>
+	$<$<PLATFORM_ID:Linux>:${OGG_LIBRARIES} ${VORBISFILE_LIBRARIES} ${OPENAL_LIBRARIES}>
 )
 target_include_directories(storm-audio-deps
     INTERFACE
-        $<$<PLATFORM_ID:Linux>:${OGG_INCLUDE_DIRS} ${VORBIS_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIRS}>
+    $<$<PLATFORM_ID:Linux>:${OGG_INCLUDE_DIRS} ${VORBISFILE_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIRS}>
 )
