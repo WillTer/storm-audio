@@ -30,6 +30,7 @@ public:
     void                      set_playback_position(std::chrono::milliseconds const& pos);
     std::chrono::milliseconds get_playback_position() const;
 
+    void set_min_distance(float distance);
     void set_max_distance(float distance);
 
     void set_position_3d(std::array<float, 3> const& position);

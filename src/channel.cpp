@@ -95,6 +95,12 @@ struct Channel::Impl {
         return {};
     }
 
+    void set_min_distance(float distance) const
+    {
+        alSourcef(m_source, AL_REFERENCE_DISTANCE, distance);
+        AL_TRACE_ERRORS(m_tracer);
+    }
+
     void set_max_distance(float distance) const
     {
         alSourcef(m_source, AL_MAX_DISTANCE, distance);
@@ -269,6 +275,11 @@ void Channel::set_playback_position(std::chrono::milliseconds const& pos)
 std::chrono::milliseconds Channel::get_playback_position() const
 {
     return m_impl->get_playback_position();
+}
+
+void Channel::set_min_distance(float distance)
+{
+    m_impl->set_min_distance(distance);
 }
 
 void Channel::set_max_distance(float distance)
