@@ -31,7 +31,7 @@ public:
 int main(int argc, char** argv)
 {
     if (argc < 2) {
-        printf("Usage: %s <streamed wav file 1> [wav file 2] ... [wav file n]", argv[0]);
+        printf("Usage: %s <streamed wav/ogg file 1> [wav/ogg file 2] ... [wav/ogg file n]", argv[0]);
         return -1;
     }
 

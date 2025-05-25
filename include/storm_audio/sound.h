@@ -3,7 +3,7 @@
 #include <memory>
 #include <type_traits>
 
-#include "abstract_data_stream.h"
+#include "data_stream.h"
 #include "debug_tracer.h"
 #include "enum_flags.h"
 
@@ -20,7 +20,7 @@ public:
         Spatial3D = 1 << 2,
     };
 
-    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<AbstractDataStream>&& stream, Flags flags);
+    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags);
     ~Sound();
 
     Flags get_flags() const;

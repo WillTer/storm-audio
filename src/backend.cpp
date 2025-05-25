@@ -8,7 +8,7 @@
 #include <storm_audio/backend.h>
 
 #include "al_utils.h"
-#include "const.h"
+#include "ogg_decoder.h"
 #include "trace_helpers.h"
 #include "wav_decoder.h"
 
@@ -17,13 +17,13 @@ using namespace storm::audio;
 namespace
 {
 
-std::unique_ptr<AbstractDataStream>
-create_compatible_stream(std::filesystem::path const& file_path, [[maybe_unused]] AbstractDataStream::Format output_format)
+std::unique_ptr<DataStream> create_compatible_stream(
+    std::shared_ptr<DebugTracer> const& tracer, std::filesystem::path const& file_path, DataStream::Format output_format)
 {
     std::string ext = file_path.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 
-    // if (ext == ".ogg") { return std::make_unique<VorbisDecoder>(output_format); }
+    if (ext == ".ogg") { return std::make_unique<OggDecoder>(tracer, output_format); }
     if (ext == ".wav") { return std::make_unique<WavDecoder>(); }
 
     return nullptr;
@@ -48,9 +48,8 @@ struct Backend::Impl {
         alcMakeContextCurrent(m_context.get());
         ALC_TRACE_ERRORS(tracer, m_device.get());
 
-        m_out_format =
-            (alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) ? AbstractDataStream::Format::Float32 : AbstractDataStream::Format::Int16;
-        m_is_valid = true;
+        m_out_format = DataStream::Format::Int16;
+        m_is_valid   = true;
     }
 
     ~Impl() = default;
@@ -59,7 +58,7 @@ struct Backend::Impl {
     {
         if (!std::filesystem::exists(file_path)) { return nullptr; }
 
-        auto stream = create_compatible_stream(file_path, m_out_format);
+        auto stream = create_compatible_stream(m_tracer, file_path, m_out_format);
         if (!stream || stream->load_file(file_path) != Result::Ok) { return nullptr; }
 
         return std::make_shared<Sound>(m_tracer, std::move(stream), flags);
@@ -119,7 +118,7 @@ struct Backend::Impl {
 
     std::vector<std::unique_ptr<Channel>> m_channels;
 
-    AbstractDataStream::Format m_out_format;
+    DataStream::Format m_out_format;
 
     bool m_is_valid;
 };

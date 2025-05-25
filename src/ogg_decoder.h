@@ -3,15 +3,16 @@
 #include <memory>
 
 #include <storm_audio/data_stream.h>
+#include <storm_audio/debug_tracer.h>
 
 namespace storm::audio
 {
 
-class WavDecoder: virtual public DataStream
+class OggDecoder: virtual public DataStream
 {
 public:
-    WavDecoder();
-    ~WavDecoder() override;
+    OggDecoder(std::shared_ptr<DebugTracer> const& tracer, Format format);
+    ~OggDecoder() override;
 
     Result load_file(std::filesystem::path const& file_path) override;
 

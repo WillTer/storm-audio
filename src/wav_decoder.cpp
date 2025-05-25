@@ -40,11 +40,11 @@ struct WavFileData {
     uint32_t sample_rate;
     uint16_t bits_per_sample;
 
-    std::vector<uint8_t> pcm_data;
+    std::vector<char> pcm_data;
 };
 
 template <typename T>
-size_t read_chunk(std::vector<uint8_t> const& mem, size_t const offset, T& chunk)
+size_t read_chunk(std::vector<char> const& mem, size_t const offset, T& chunk)
 {
     std::memcpy(&chunk, mem.data() + offset, sizeof(chunk));
     return sizeof(chunk);
@@ -57,10 +57,10 @@ bool is_id_equals(std::string_view const& id, std::string_view const& expected)
     return id[0] == expected[0] && id[1] == expected[1] && id[2] == expected[2] && id[3] == expected[3];
 }
 
-bool parse_wave_file(std::vector<uint8_t> const& mem, WavFileData& output_data)
+bool parse_wave_file(std::vector<char> const& mem, WavFileData& output_data)
 {
-    size_t               offset     = 0;
-    std::vector<uint8_t> audio_data = {};
+    size_t            offset     = 0;
+    std::vector<char> audio_data = {};
 
     RiffChunk riff_chunk = {};
     offset += read_chunk(mem, offset, riff_chunk);
@@ -80,7 +80,7 @@ bool parse_wave_file(std::vector<uint8_t> const& mem, WavFileData& output_data)
         offset += read_chunk(mem, offset, chunk);
 
         if (is_id_equals(chunk.id, "data") && mem.size() >= (offset + chunk.size)) {
-            output_data.pcm_data = std::vector<uint8_t>(mem.data() + offset, mem.data() + offset + chunk.size);
+            output_data.pcm_data = std::vector<char>(mem.data() + offset, mem.data() + offset + chunk.size);
 
             // No need to read any other chunks
             return true;
@@ -98,55 +98,65 @@ struct WavDecoder::Impl {
     Impl() : m_is_valid {false}, m_channels {0}, m_sample_rate {0}, m_format {Format::Unknown}, m_sample_size {1}, m_offset {0} {}
     ~Impl() = default;
 
-    Result load_memory(std::vector<uint8_t> const& mem)
+    Result load_file(std::filesystem::path const& file_path)
     {
-        WavFileData file_data = {};
+        if (!std::filesystem::exists(file_path)) { return Result::ErrFileNotFound; }
 
-        if (!parse_wave_file(mem, file_data)) {
+        auto const file = std::shared_ptr<std::FILE>(std::fopen(file_path.string().c_str(), "rb"), [](std::FILE* p) { std::fclose(p); });
+        if (!file) { return Result::ErrFileOpenFailed; }
+
+        std::fseek(file.get(), 0, SEEK_END);
+        size_t const sz = std::ftell(file.get());
+        std::fseek(file.get(), 0, SEEK_SET);
+
+        std::vector<char> file_data = {};
+        file_data.resize(sz);
+        if (std::fread(file_data.data(), sizeof(char), sz, file.get()) != sz) { return Result::ErrFileOpenFailed; }
+
+        WavFileData wav_data = {};
+        if (!parse_wave_file(file_data, wav_data)) {
             return Result::ErrFileFormatInvalid;  // Invalid WAVE-file
         }
 
-        // 1 - PCM, 3 - IEEE Float 32
-        if (file_data.audio_format == 1 && file_data.bits_per_sample == 8) {
-            m_format = AbstractDataStream::Format::Int8;
-        } else if (file_data.audio_format == 1 && file_data.bits_per_sample == 16) {
-            m_format = AbstractDataStream::Format::Int16;
-        } else if (file_data.audio_format == 3 && file_data.bits_per_sample == 32 && alIsExtensionPresent(FLOAT_EXT_NAME) == AL_TRUE) {
-            m_format = AbstractDataStream::Format::Float32;
+        // 1 - PCM
+        if (wav_data.audio_format == 1 && wav_data.bits_per_sample == 8) {
+            m_format = DataStream::Format::Int8;
+        } else if (wav_data.audio_format == 1 && wav_data.bits_per_sample == 16) {
+            m_format = DataStream::Format::Int16;
         } else {
             return Result::ErrFileFormatNotSupported;  // Unsupported format
         }
 
-        m_data        = std::move(file_data.pcm_data);
-        m_channels    = file_data.channels;
-        m_sample_rate = file_data.sample_rate;
-        m_sample_size = file_data.bits_per_sample / 8;
+        m_data        = std::move(wav_data.pcm_data);
+        m_channels    = wav_data.channels;
+        m_sample_rate = wav_data.sample_rate;
+        m_sample_size = wav_data.bits_per_sample / 8;
 
         m_is_valid = true;
 
         return Result::Ok;
     }
 
-    size_t get_samples(std::vector<uint8_t>& buffer, size_t sample_count)
+    size_t get_samples(std::vector<char>& buffer, size_t sample_count)
     {
         auto const bytes_count = m_data.size() - m_offset;
         if (bytes_count == 0 || sample_count == 0) { return 0; }
 
-        auto const bytes_to_copy = std::min(sample_count * m_sample_size, bytes_count);
+        auto const bytes_to_copy = std::min(sample_count * m_sample_size * m_channels, bytes_count);
         buffer.resize(bytes_to_copy);
 
         std::memcpy(buffer.data(), m_data.data() + m_offset, buffer.size());
         m_offset += bytes_to_copy;
 
-        return bytes_to_copy;
+        return bytes_to_copy / (m_sample_size * m_channels);
     }
 
-    size_t get_samples_all(std::vector<uint8_t>& buffer)
+    size_t get_samples_all(std::vector<char>& buffer)
     {
         auto const bytes_count = m_data.size() - m_offset;
         if (bytes_count == 0) { return 0; }
 
-        return get_samples(buffer, bytes_count / m_sample_size);
+        return get_samples(buffer, bytes_count / (m_sample_size * m_channels));
     }
 
     void seek_start()
@@ -156,10 +166,10 @@ struct WavDecoder::Impl {
 
     bool m_is_valid;
 
-    std::vector<uint8_t> m_data;
-    int                  m_channels;
-    int                  m_sample_rate;
-    Format               m_format;
+    std::vector<char> m_data;
+    int               m_channels;
+    int               m_sample_rate;
+    Format            m_format;
 
     size_t m_sample_size;
     size_t m_offset;
@@ -169,9 +179,9 @@ WavDecoder::WavDecoder() : m_impl {std::make_unique<Impl>()} {}
 
 WavDecoder::~WavDecoder() = default;
 
-Result WavDecoder::load_memory(std::vector<uint8_t> const& mem)
+Result WavDecoder::load_file(std::filesystem::path const& file_path)
 {
-    return m_impl->load_memory(mem);
+    return m_impl->load_file(file_path);
 }
 
 bool WavDecoder::is_valid()
@@ -189,19 +199,19 @@ int WavDecoder::get_sample_rate() const
     return m_impl->m_sample_rate;
 }
 
-AbstractDataStream::Format WavDecoder::get_data_format() const
+DataStream::Format WavDecoder::get_data_format() const
 {
     return m_impl->m_format;
 }
 
-size_t WavDecoder::get_samples(std::vector<uint8_t>& buffer, size_t sample_count)
+size_t WavDecoder::get_samples(std::vector<char>& buffer, size_t sample_count)
 {
     if (!m_impl->m_is_valid) { return 0; }
 
     return m_impl->get_samples(buffer, sample_count);
 }
 
-size_t WavDecoder::get_samples_all(std::vector<uint8_t>& buffer)
+size_t WavDecoder::get_samples_all(std::vector<char>& buffer)
 {
     if (!m_impl->m_is_valid) { return 0; }
 

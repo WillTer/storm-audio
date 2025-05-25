@@ -10,7 +10,7 @@
 using namespace storm::audio;
 
 struct Sound::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<AbstractDataStream>&& stream, Flags flags)
+    Impl(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags)
         : m_tracer {tracer}
         , m_stream {std::move(stream)}
         , m_flags {flags}
@@ -63,7 +63,7 @@ struct Sound::Impl {
 
     void prepare_buffer_data()
     {
-        std::vector<uint8_t> buffer = {};
+        std::vector<char> buffer = {};
 
         auto const samples = m_stream->get_samples_all(buffer);
         if (samples == 0) { return; }
@@ -81,14 +81,15 @@ struct Sound::Impl {
 
     bool update_buffer(unsigned buffer, bool is_looping)
     {
-        m_buffer_data.resize(BUFFER_SAMPLE_COUNT * m_sample_size);
         auto samples = m_stream->get_samples(m_buffer_data, BUFFER_SAMPLE_COUNT);
 
+        // If nothing read and we're looping, read again, but from the start
         if (samples == 0 && is_looping) {
             m_stream->seek_start();
             samples = m_stream->get_samples(m_buffer_data, BUFFER_SAMPLE_COUNT);
         }
 
+        // If still nothing read (or we're not looping), then just stop
         if (samples == 0) { return false; }
 
         alBufferData(buffer, m_al_format, m_buffer_data.data(), static_cast<int>(m_buffer_data.size()), m_sample_rate);
@@ -126,11 +127,10 @@ struct Sound::Impl {
     }
 
     std::shared_ptr<DebugTracer> m_tracer;
+    std::unique_ptr<DataStream>  m_stream;
 
-    std::unique_ptr<AbstractDataStream> m_stream;
-
-    Flags                      m_flags;
-    AbstractDataStream::Format m_data_format;
+    Flags              m_flags;
+    DataStream::Format m_data_format;
 
     ALenum m_al_format;
     int    m_channels;
@@ -138,13 +138,13 @@ struct Sound::Impl {
 
     size_t m_sample_size;
 
-    std::vector<uint8_t> m_buffer_data;
+    std::vector<char> m_buffer_data;
 
     std::vector<unsigned> m_buffers;
     std::vector<unsigned> m_attached_sources;
 };
 
-Sound::Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<AbstractDataStream>&& stream, Flags flags)
+Sound::Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags)
     : m_impl {std::make_unique<Impl>(tracer, std::move(stream), flags)}
 {
 }

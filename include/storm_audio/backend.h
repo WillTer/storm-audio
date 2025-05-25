@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <memory>
 
-#include "abstract_data_stream.h"
 #include "channel.h"
+#include "data_stream.h"
 #include "debug_tracer.h"
 #include "sound.h"
 

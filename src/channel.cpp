@@ -200,7 +200,7 @@ struct Channel::Impl {
     {
         if (!m_sound) { return; }
 
-        ChannelState const state = get_state();
+        auto const state = get_state();
         if (state == ChannelState::Paused || state == ChannelState::Initial) { return; }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { update_stream(); }
