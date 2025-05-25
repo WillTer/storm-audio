@@ -175,13 +175,19 @@ struct Channel::Impl {
             alSourcei(m_source, AL_SOURCE_RELATIVE, AL_TRUE);
             AL_TRACE_ERRORS(m_tracer);
 
-            alSourcei(m_source, AL_REFERENCE_DISTANCE, 1);
+            alSourcei(m_source, AL_ROLLOFF_FACTOR, 0);
             AL_TRACE_ERRORS(m_tracer);
 
-            // Update 3D data
-            set_position_3d({0, 0, 1});
+            // Reset 3D data
+            set_position_3d({0, 0, -1});
             set_direction_3d({});
             set_velocity_3d({});
+        } else if (sound->get_channels() == 1) {
+            alSourcei(m_source, AL_SOURCE_RELATIVE, AL_FALSE);
+            AL_TRACE_ERRORS(m_tracer);
+
+            alSourcei(m_source, AL_ROLLOFF_FACTOR, 1);
+            AL_TRACE_ERRORS(m_tracer);
         }
     }
 
