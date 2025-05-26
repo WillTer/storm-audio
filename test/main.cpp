@@ -6,6 +6,9 @@
 
 using namespace storm::audio;
 
+namespace
+{
+
 class Tracer: public DebugTracer
 {
 public:
@@ -28,35 +31,66 @@ public:
     }
 };
 
+void print_usage(std::string_view const& app_path)
+{
+    printf("Usage: %s <option> <path>\n", app_path.data());
+    printf("Options:\n");
+    printf("\t--file\t\tPlay single file as whole\n");
+    printf("\t--file-stream\tPlay single file as stream\n");
+    printf("\t--dir\t\tPlay all files in directory as stream (non-recursive)\n");
+}
+
+void play_file(Backend& backend, Sound::Flags flags, std::filesystem::path const& file)
+{
+    auto  sound   = backend.create_sound(file, flags);
+    auto* channel = backend.attach_sound(sound);
+    channel->set_looping(true);
+    channel->play();
+
+    constexpr auto pause = std::chrono::milliseconds(10);
+    while (true) {
+        backend.update();
+        std::this_thread::sleep_for(pause);
+    }
+}
+
+void play_dir(Backend& backend, Sound::Flags flags, std::filesystem::path const& dir)
+{
+    for (auto const& file: std::filesystem::directory_iterator(dir)) {
+        auto  sound   = backend.create_sound(file.path(), flags);
+        auto* channel = backend.attach_sound(sound);
+        channel->set_looping(false);
+        channel->play();
+
+        constexpr auto pause = std::chrono::milliseconds(10);
+        while (channel->get_state() != ChannelState::Stopped) {
+            backend.update();
+            std::this_thread::sleep_for(pause);
+        }
+    }
+}
+
+}  // namespace
+
 int main(int argc, char** argv)
 {
-    if (argc < 2) {
-        printf("Usage: %s <streamed wav/ogg file 1> [wav/ogg file 2] ... [wav/ogg file n]", argv[0]);
+    if (argc < 3) {
+        print_usage(argv[0]);
         return -1;
     }
 
     auto tracer  = std::make_shared<Tracer>();
     auto backend = std::make_unique<Backend>(tracer);
 
-    std::vector<Channel*> channels = {};
-
-    for (int i = 1; i < argc; ++i) {
-        auto const flags = i == 1 ? Sound::Flags::Stereo2D | Sound::Flags::Stream : Sound::Flags::Stereo2D;
-        auto       sound = backend->create_sound(argv[i], flags);
-
-        auto* channel = backend->attach_sound(sound);
-        channel->set_looping(true);
-        channels.push_back(channel);
-    }
-
-    for (auto* channel: channels) {
-        channel->play();
-    }
-
-    constexpr auto pause = std::chrono::milliseconds(10);
-    while (true) {
-        backend->update();
-        std::this_thread::sleep_for(pause);
+    if (std::string_view(argv[1]) == "--file") {
+        play_file(*backend, Sound::Flags::Stereo2D, argv[2]);
+    } else if (std::string_view(argv[1]) == "--file-stream") {
+        play_file(*backend, Sound::Flags::Stereo2D | Sound::Flags::Stream, argv[2]);
+    } else if (std::string_view(argv[1]) == "--dir") {
+        play_dir(*backend, Sound::Flags::Stereo2D | Sound::Flags::Stream, argv[2]);
+    } else {
+        print_usage(argv[0]);
+        return -1;
     }
 
     return 0;
