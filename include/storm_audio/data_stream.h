@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <vector>
 
@@ -32,6 +33,9 @@ public:
     virtual size_t get_samples_all(std::vector<char>& buffer)                  = 0;
 
     virtual void seek_start() = 0;
+
+    virtual void                      set_current_position(std::chrono::milliseconds const& pos) = 0;
+    virtual std::chrono::milliseconds get_current_position() const                               = 0;
 };
 
 }  // namespace storm::audio

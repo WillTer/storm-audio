@@ -136,12 +136,24 @@ struct OggDecoder::Impl {
         ov_raw_seek(&m_stream, 0);
     }
 
+    void set_current_position(std::chrono::milliseconds const& pos)
+    {
+        double const pos_s = pos.count() / 1000.0;
+        ov_time_seek(&m_stream, pos_s);
+    }
+
+    std::chrono::milliseconds get_current_position() const
+    {
+        double const pos_ms = ov_time_tell(&m_stream) * 1000.0;
+        return std::chrono::milliseconds(static_cast<int64_t>(pos_ms));
+    }
+
     std::shared_ptr<DebugTracer> m_tracer;
 
     bool m_is_valid;
 
     std::shared_ptr<std::FILE> m_file_handler;
-    OggVorbis_File             m_stream;
+    mutable OggVorbis_File     m_stream;
 
     int    m_channels;
     int    m_sample_rate;
@@ -198,4 +210,14 @@ size_t OggDecoder::get_samples_all(std::vector<char>& buffer)
 void OggDecoder::seek_start()
 {
     m_impl->seek_start();
+}
+
+void OggDecoder::set_current_position(std::chrono::milliseconds const& pos)
+{
+    m_impl->set_current_position(pos);
+}
+
+std::chrono::milliseconds OggDecoder::get_current_position() const
+{
+    return m_impl->get_current_position();
 }

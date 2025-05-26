@@ -36,6 +36,8 @@ private:
     bool update_buffer(unsigned buffer, bool is_looping);
     void reset_buffers();
 
+    DataStream& get_stream() const;
+
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };

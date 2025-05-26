@@ -170,6 +170,20 @@ struct WavDecoder::Impl {
         m_offset = 0;
     }
 
+    void set_current_position(std::chrono::milliseconds const& pos)
+    {
+        auto const sample_rate_ms = m_sample_rate / 1000;
+        auto const sample_offset  = pos.count() * sample_rate_ms;
+        m_offset                  = std::min(sample_offset * m_sample_size, m_data.size());
+    }
+
+    std::chrono::milliseconds get_current_position() const
+    {
+        auto const sample_offset  = m_offset / m_sample_size;
+        auto const sample_rate_ms = m_sample_rate / 1000;
+        return std::chrono::milliseconds(sample_offset / sample_rate_ms);
+    }
+
     bool m_is_valid;
 
     std::vector<char> m_data;
@@ -227,4 +241,14 @@ size_t WavDecoder::get_samples_all(std::vector<char>& buffer)
 void WavDecoder::seek_start()
 {
     m_impl->seek_start();
+}
+
+void WavDecoder::set_current_position(std::chrono::milliseconds const& pos)
+{
+    m_impl->set_current_position(pos);
+}
+
+std::chrono::milliseconds WavDecoder::get_current_position() const
+{
+    return m_impl->get_current_position();
 }

@@ -76,13 +76,18 @@ struct Channel::Impl {
         }
     }
 
-    void set_playback_position([[maybe_unused]] std::chrono::milliseconds const& pos) const
+    void set_playback_position(std::chrono::milliseconds const& pos) const
     {
         if (!m_sound) {
             TRACE_WARN(m_tracer, "Channel is empty");
             return;
         }
-        // TODO
+
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
+            m_sound->get_stream().set_current_position(pos);
+        } else {
+            alSourcei(m_source, AL_SEC_OFFSET, static_cast<ALint>(pos.count() / 1000));
+        }
     }
 
     std::chrono::milliseconds get_playback_position() const
@@ -91,8 +96,13 @@ struct Channel::Impl {
             TRACE_WARN(m_tracer, "Channel is empty");
             return {};
         }
-        // TODO
-        return {};
+
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { return m_sound->get_stream().get_current_position(); }
+
+        int offset_s = 0;
+        alGetSourcei(m_source, AL_SEC_OFFSET, &offset_s);
+
+        return std::chrono::milliseconds(offset_s * 1000);
     }
 
     void set_min_distance(float distance) const

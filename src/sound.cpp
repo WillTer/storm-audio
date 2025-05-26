@@ -112,6 +112,11 @@ struct Sound::Impl {
         }
     }
 
+    DataStream& get_stream() const
+    {
+        return *m_stream;
+    }
+
     void detach_all_sources()
     {
         for (auto const source: m_attached_sources) {
@@ -174,6 +179,11 @@ bool Sound::update_buffer(unsigned buffer, bool is_looping)
 void Sound::reset_buffers()
 {
     m_impl->reset_buffers();
+}
+
+DataStream& Sound::get_stream() const
+{
+    return m_impl->get_stream();
 }
 
 Sound::Flags Sound::get_flags() const
