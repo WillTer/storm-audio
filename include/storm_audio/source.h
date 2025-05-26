@@ -2,30 +2,27 @@
 
 #include <array>
 #include <chrono>
-#include <cstdint>
-#include <limits>
 #include <memory>
-
-#include "debug_tracer.h"
 
 namespace storm::audio
 {
 
-enum class ChannelState { None, Initial, Playing, Paused, Stopped };
+enum class SourceState { None, Initial, Playing, Paused, Stopped };
 
 class Sound;
+class DebugTracer;
 
-class Channel final
+class Source final
 {
 public:
-    Channel(std::shared_ptr<DebugTracer> const& tracer);
-    ~Channel();
+    Source(std::shared_ptr<DebugTracer> const& tracer);
+    ~Source();
 
     void play();
     void pause();
     void stop();
 
-    ChannelState get_state() const;
+    SourceState get_state() const;
 
     void                      set_playback_position(std::chrono::milliseconds const& pos);
     std::chrono::milliseconds get_playback_position() const;

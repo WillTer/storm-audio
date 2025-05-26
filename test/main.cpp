@@ -3,6 +3,7 @@
 #include <thread>
 
 #include <storm_audio/backend.h>
+#include <storm_audio/source.h>
 
 using namespace storm::audio;
 
@@ -42,10 +43,10 @@ void print_usage(std::string_view const& app_path)
 
 void play_file(Backend& backend, Sound::Flags flags, std::filesystem::path const& file)
 {
-    auto  sound   = backend.create_sound(file, flags);
-    auto* channel = backend.attach_sound(sound);
-    channel->set_looping(true);
-    channel->play();
+    auto const sound  = backend.create_sound(file, flags);
+    auto const source = backend.attach_sound(sound);
+    source->set_looping(true);
+    source->play();
 
     constexpr auto pause = std::chrono::milliseconds(10);
     while (true) {
@@ -57,13 +58,13 @@ void play_file(Backend& backend, Sound::Flags flags, std::filesystem::path const
 void play_dir(Backend& backend, Sound::Flags flags, std::filesystem::path const& dir)
 {
     for (auto const& file: std::filesystem::directory_iterator(dir)) {
-        auto  sound   = backend.create_sound(file.path(), flags);
-        auto* channel = backend.attach_sound(sound);
-        channel->set_looping(false);
-        channel->play();
+        auto const sound  = backend.create_sound(file.path(), flags);
+        auto const source = backend.attach_sound(sound);
+        source->set_looping(false);
+        source->play();
 
         constexpr auto pause = std::chrono::milliseconds(10);
-        while (channel->get_state() != ChannelState::Stopped) {
+        while (source->get_state() != SourceState::Stopped) {
             backend.update();
             std::this_thread::sleep_for(pause);
         }

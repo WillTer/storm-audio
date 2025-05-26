@@ -26,7 +26,7 @@ public:
     Flags get_flags() const;
 
 private:
-    friend class Channel;
+    friend class Source;
 
     void attach_buffers(unsigned source);
     void detach_buffers(unsigned source);

@@ -1,15 +1,15 @@
 
 #include <algorithm>
 
-#include <storm_audio/channel.h>
 #include <storm_audio/sound.h>
+#include <storm_audio/source.h>
 
 #include "al_utils.h"
 #include "trace_helpers.h"
 
 using namespace storm::audio;
 
-struct Channel::Impl {
+struct Source::Impl {
     Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}, m_is_looping {false}
     {
         alGenSources(1, &m_source);
@@ -31,7 +31,7 @@ struct Channel::Impl {
     void play() const
     {
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
@@ -42,7 +42,7 @@ struct Channel::Impl {
     void pause() const
     {
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
@@ -53,7 +53,7 @@ struct Channel::Impl {
     void stop() const
     {
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
@@ -61,48 +61,50 @@ struct Channel::Impl {
         AL_TRACE_ERRORS(m_tracer);
     }
 
-    ChannelState get_state() const
+    SourceState get_state() const
     {
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
         AL_TRACE_ERRORS(m_tracer);
 
         switch (al_state) {
-        case AL_PLAYING: return ChannelState::Playing;
-        case AL_PAUSED: return ChannelState::Paused;
-        case AL_STOPPED: return ChannelState::Stopped;
-        case AL_INITIAL: return ChannelState::Initial;
-        default: return ChannelState::None;
+        case AL_PLAYING: return SourceState::Playing;
+        case AL_PAUSED: return SourceState::Paused;
+        case AL_STOPPED: return SourceState::Stopped;
+        case AL_INITIAL: return SourceState::Initial;
+        default: return SourceState::None;
         }
     }
 
     void set_playback_position(std::chrono::milliseconds const& pos) const
     {
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
             m_sound->get_stream().set_current_position(pos);
         } else {
-            alSourcei(m_source, AL_SEC_OFFSET, static_cast<ALint>(pos.count() / 1000));
+            alSourcef(m_source, AL_SEC_OFFSET, pos.count() / 1000.0F);
+            AL_TRACE_ERRORS(m_tracer);
         }
     }
 
     std::chrono::milliseconds get_playback_position() const
     {
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return {};
         }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { return m_sound->get_stream().get_current_position(); }
 
-        int offset_s = 0;
-        alGetSourcei(m_source, AL_SEC_OFFSET, &offset_s);
+        ALfloat offset_s = 0;
+        alGetSourcef(m_source, AL_SEC_OFFSET, &offset_s);
+        AL_TRACE_ERRORS(m_tracer);
 
-        return std::chrono::milliseconds(offset_s * 1000);
+        return std::chrono::milliseconds(static_cast<uint64_t>(offset_s * 1000));
     }
 
     void set_min_distance(float distance) const
@@ -169,7 +171,7 @@ struct Channel::Impl {
     {
         m_is_looping = flag;
         if (!m_sound) {
-            TRACE_WARN(m_tracer, "Channel is empty");
+            TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
@@ -193,11 +195,6 @@ struct Channel::Impl {
 
             alSourcei(m_source, AL_ROLLOFF_FACTOR, 0);
             AL_TRACE_ERRORS(m_tracer);
-
-            // Reset 3D data
-            set_position_3d({0, 0, -1});
-            set_direction_3d({});
-            set_velocity_3d({});
         } else if (sound->get_channels() == 1) {
             alSourcei(m_source, AL_SOURCE_RELATIVE, AL_FALSE);
             AL_TRACE_ERRORS(m_tracer);
@@ -205,6 +202,11 @@ struct Channel::Impl {
             alSourcei(m_source, AL_ROLLOFF_FACTOR, 1);
             AL_TRACE_ERRORS(m_tracer);
         }
+
+        // Reset 3D data
+        set_position_3d({0, 0, -1});
+        set_direction_3d({});
+        set_velocity_3d({});
     }
 
     void detach_sound()
@@ -223,7 +225,7 @@ struct Channel::Impl {
         if (!m_sound) { return; }
 
         auto const state = get_state();
-        if (state == ChannelState::Paused || state == ChannelState::Initial) { return; }
+        if (state == SourceState::Paused || state == SourceState::Initial) { return; }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { update_stream(); }
     }
@@ -254,100 +256,100 @@ struct Channel::Impl {
     std::shared_ptr<Sound> m_sound;
 };
 
-Channel::Channel(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
-Channel::~Channel() = default;
+Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
+Source::~Source() = default;
 
-void Channel::play()
+void Source::play()
 {
     m_impl->play();
 }
 
-void Channel::pause()
+void Source::pause()
 {
     m_impl->pause();
 }
 
-void Channel::stop()
+void Source::stop()
 {
     m_impl->stop();
 }
 
-ChannelState Channel::get_state() const
+SourceState Source::get_state() const
 {
     return m_impl->get_state();
 }
 
-void Channel::set_playback_position(std::chrono::milliseconds const& pos)
+void Source::set_playback_position(std::chrono::milliseconds const& pos)
 {
     m_impl->set_playback_position(pos);
 }
 
-std::chrono::milliseconds Channel::get_playback_position() const
+std::chrono::milliseconds Source::get_playback_position() const
 {
     return m_impl->get_playback_position();
 }
 
-void Channel::set_min_distance(float distance)
+void Source::set_min_distance(float distance)
 {
     m_impl->set_min_distance(distance);
 }
 
-void Channel::set_max_distance(float distance)
+void Source::set_max_distance(float distance)
 {
     m_impl->set_max_distance(distance);
 }
 
-void Channel::set_position_3d(std::array<float, 3> const& position)
+void Source::set_position_3d(std::array<float, 3> const& position)
 {
     m_impl->set_position_3d(position);
 }
 
-void Channel::set_velocity_3d(std::array<float, 3> const& velocity)
+void Source::set_velocity_3d(std::array<float, 3> const& velocity)
 {
     m_impl->set_velocity_3d(velocity);
 }
 
-void Channel::set_direction_3d(std::array<float, 3> const& orientation)
+void Source::set_direction_3d(std::array<float, 3> const& orientation)
 {
     m_impl->set_direction_3d(orientation);
 }
 
-void Channel::set_volume(float volume_level)
+void Source::set_volume(float volume_level)
 {
     m_impl->set_volume(volume_level);
 }
 
-float Channel::get_volume() const
+float Source::get_volume() const
 {
     return m_impl->get_volume();
 }
 
-void Channel::set_pitch(float pitch_level)
+void Source::set_pitch(float pitch_level)
 {
     m_impl->set_pitch(pitch_level);
 }
 
-float Channel::get_pitch() const
+float Source::get_pitch() const
 {
     return m_impl->get_pitch();
 }
 
-void Channel::set_looping(bool flag)
+void Source::set_looping(bool flag)
 {
     m_impl->set_looping(flag);
 }
 
-void Channel::attach_sound(std::shared_ptr<Sound> const& sound)
+void Source::attach_sound(std::shared_ptr<Sound> const& sound)
 {
     m_impl->attach_sound(sound);
 }
 
-void Channel::detach_sound()
+void Source::detach_sound()
 {
     m_impl->detach_sound();
 }
 
-void Channel::internal_update()
+void Source::internal_update()
 {
     m_impl->internal_update();
 }

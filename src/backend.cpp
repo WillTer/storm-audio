@@ -6,6 +6,7 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <storm_audio/backend.h>
+#include <storm_audio/source.h>
 
 #include "al_utils.h"
 #include "ogg_decoder.h"
@@ -64,26 +65,26 @@ struct Backend::Impl {
         return std::make_shared<Sound>(m_tracer, std::move(stream), flags);
     }
 
-    Channel* attach_sound(std::shared_ptr<Sound> const& sound)
+    std::shared_ptr<Source> attach_sound(std::shared_ptr<Sound> const& sound)
     {
         if (!sound) { return nullptr; }
 
-        Channel* channel = nullptr;
+        std::shared_ptr<Source> source = nullptr;
 
-        auto const free_channel =
-            std::find_if(m_channels.begin(), m_channels.end(), [](auto const& ch) { return ch->get_state() == ChannelState::Stopped; });
+        auto const free_source = std::find_if(
+            m_sources.begin(), m_sources.end(), [](auto const& source) { return source->get_state() == SourceState::Stopped; });
 
-        if (free_channel != m_channels.end()) {
-            channel = free_channel->get();
-            channel->detach_sound();
+        if (free_source != m_sources.end()) {
+            source = *free_source;
+            source->detach_sound();
         } else {
-            TRACE_INFO(m_tracer, "Add new audio channel (current channels count: " + std::to_string(m_channels.size()) + ")");
-            m_channels.push_back(std::make_unique<Channel>(m_tracer));
-            channel = m_channels.back().get();
+            TRACE_INFO(m_tracer, "Add new audio source (current sources count: " + std::to_string(m_sources.size()) + ")");
+            m_sources.push_back(std::make_shared<Source>(m_tracer));
+            source = m_sources.back();
         }
 
-        channel->attach_sound(sound);
-        return channel;
+        source->attach_sound(sound);
+        return source;
     }
 
     void set_listener_position_3d(std::array<float, 3> const& position) const
@@ -106,8 +107,8 @@ struct Backend::Impl {
 
     void update()
     {
-        for (auto& channel: m_channels) {
-            channel->internal_update();
+        for (auto& source: m_sources) {
+            source->internal_update();
         }
     }
 
@@ -116,7 +117,7 @@ struct Backend::Impl {
     std::shared_ptr<ALCdevice>  m_device;
     std::shared_ptr<ALCcontext> m_context;
 
-    std::vector<std::unique_ptr<Channel>> m_channels;
+    std::vector<std::shared_ptr<Source>> m_sources;
 
     DataStream::Format m_out_format;
 
@@ -133,7 +134,7 @@ std::shared_ptr<Sound> Backend::create_sound(std::filesystem::path const& file_p
     return m_impl->create_sound(file_path, flags);
 }
 
-Channel* Backend::attach_sound(std::shared_ptr<Sound> const& sound)
+std::shared_ptr<Source> Backend::attach_sound(std::shared_ptr<Sound> const& sound)
 {
     if (!m_impl->m_is_valid) { return {}; }
 
