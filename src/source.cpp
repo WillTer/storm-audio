@@ -50,7 +50,7 @@ struct Source::Impl {
         AL_TRACE_ERRORS(m_tracer);
     }
 
-    void stop() const
+    void stop()
     {
         if (!m_sound) {
             TRACE_WARN(m_tracer, "Source is empty");
@@ -59,10 +59,14 @@ struct Source::Impl {
 
         alSourceStop(m_source);
         AL_TRACE_ERRORS(m_tracer);
+
+        detach_sound();
     }
 
     SourceState get_state() const
     {
+        if (!m_sound) { return SourceState::Stopped; }
+
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
         AL_TRACE_ERRORS(m_tracer);
@@ -70,7 +74,10 @@ struct Source::Impl {
         switch (al_state) {
         case AL_PLAYING: return SourceState::Playing;
         case AL_PAUSED: return SourceState::Paused;
-        case AL_STOPPED: return SourceState::Stopped;
+        case AL_STOPPED:
+            // Pretend to be playing if some lag occurs and we didn't update buffers in time
+            if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { return SourceState::Playing; }
+            return SourceState::Stopped;
         case AL_INITIAL: return SourceState::Initial;
         default: return SourceState::None;
         }
@@ -220,22 +227,36 @@ struct Source::Impl {
         }
     }
 
-    void internal_update() const
+    void internal_update()
     {
         if (!m_sound) { return; }
 
         auto const state = get_state();
         if (state == SourceState::Paused || state == SourceState::Initial) { return; }
 
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { update_stream(); }
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
+            auto const updated = update_stream();
+            if (state == SourceState::Playing) { return; }
+
+            // If sound is existing and we have data for it, then it's wasn't stopped by a program
+            // but by a lack of buffer data (because of lag or something like that), so continue to play it
+            if (updated > 0) {
+                play();
+            } else {
+                detach_sound();
+            }
+        } else if (state == SourceState::Stopped) {
+            detach_sound();
+        }
     }
 
-    void update_stream() const
+    size_t update_stream() const
     {
         ALint processed = 0;
         alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &processed);
         AL_TRACE_ERRORS(m_tracer);
 
+        size_t updated = 0;
         for (ALint i = 0; i < processed; ++i) {
             ALuint buffer = 0;
             alSourceUnqueueBuffers(m_source, 1, &buffer);
@@ -244,8 +265,11 @@ struct Source::Impl {
             if (m_sound->update_buffer(buffer, m_is_looping)) {
                 alSourceQueueBuffers(m_source, 1, &buffer);
                 AL_TRACE_ERRORS(m_tracer);
+                ++updated;
             }
         }
+
+        return updated;
     }
 
     std::shared_ptr<DebugTracer> m_tracer;
