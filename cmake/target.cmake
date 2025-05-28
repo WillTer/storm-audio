@@ -124,7 +124,7 @@ function(cxx_library)
     target_sources(${LIB_TARGET_NAME} PRIVATE ${SOURCES})
     target_compile_options(${LIB_TARGET_NAME} PRIVATE ${STORM_CXX_FLAGS})
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE ${COMPILE_DEFINITIONS})
-    target_link_options(${LIB_TARGET_NAME} PRIVATE ${STORM_LINK_FLAGS})
+    target_link_options(${LIB_TARGET_NAME} PUBLIC ${STORM_LINK_FLAGS})
 
     target_link_libraries(${LIB_TARGET_NAME}
     PRIVATE
