@@ -14,7 +14,7 @@ class DebugTracer;
 class Backend final
 {
 public:
-    Backend(std::shared_ptr<DebugTracer> const& tracer);
+    Backend(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count);
     ~Backend();
 
     std::shared_ptr<Sound>  create_sound(std::filesystem::path const& file_path, Sound::Flags flags);

@@ -7,7 +7,7 @@
 namespace storm::audio
 {
 
-enum class SourceState { None, Initial, Playing, Paused, Stopped };
+enum class SourceState { Free, Playing, Paused, Stopped };
 
 class Sound;
 class DebugTracer;

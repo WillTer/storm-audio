@@ -5,8 +5,6 @@
 
 #include <AL/al.h>
 
-#include "const.h"
-
 using namespace storm::audio;
 
 namespace
@@ -101,7 +99,17 @@ bool parse_wave_file(std::vector<char> const& mem, WavFileData& output_data)
 }  // namespace
 
 struct WavDecoder::Impl {
-    Impl() : m_is_valid {false}, m_channels {0}, m_sample_rate {0}, m_format {Format::Unknown}, m_sample_size {1}, m_offset {0} {}
+    Impl()
+        : m_is_valid {false}
+        , m_buffer_pos {std::chrono::milliseconds(0)}
+        , m_channels {0}
+        , m_sample_rate {0}
+        , m_format {Format::Unknown}
+        , m_sample_size {1}
+        , m_offset {0}
+    {
+    }
+
     ~Impl() = default;
 
     Result load_file(std::filesystem::path const& file_path)
@@ -145,6 +153,8 @@ struct WavDecoder::Impl {
 
     size_t get_samples(std::vector<char>& buffer, size_t sample_count)
     {
+        update_buffer_position();
+
         auto const bytes_count = m_data.size() - m_offset;
         if (bytes_count == 0 || sample_count == 0) { return 0; }
 
@@ -159,6 +169,8 @@ struct WavDecoder::Impl {
 
     size_t get_samples_all(std::vector<char>& buffer)
     {
+        update_buffer_position();
+
         auto const bytes_count = m_data.size() - m_offset;
         if (bytes_count == 0) { return 0; }
 
@@ -170,21 +182,29 @@ struct WavDecoder::Impl {
         m_offset = 0;
     }
 
-    void set_current_position(std::chrono::milliseconds const& pos)
+    void set_buffer_position(std::chrono::milliseconds const& pos)
     {
         auto const sample_rate_ms = m_sample_rate / 1000;
         auto const sample_offset  = pos.count() * sample_rate_ms;
         m_offset                  = std::min(sample_offset * m_sample_size, m_data.size());
+        update_buffer_position();
     }
 
-    std::chrono::milliseconds get_current_position() const
+    std::chrono::milliseconds get_buffer_position() const
+    {
+        return m_buffer_pos;
+    }
+
+    void update_buffer_position()
     {
         auto const sample_offset  = m_offset / m_sample_size;
         auto const sample_rate_ms = m_sample_rate / 1000;
-        return std::chrono::milliseconds(sample_offset / sample_rate_ms);
+        m_buffer_pos              = std::chrono::milliseconds(sample_offset / sample_rate_ms);
     }
 
     bool m_is_valid;
+
+    std::chrono::milliseconds m_buffer_pos;
 
     std::vector<char> m_data;
     int               m_channels;
@@ -243,12 +263,12 @@ void WavDecoder::seek_start()
     m_impl->seek_start();
 }
 
-void WavDecoder::set_current_position(std::chrono::milliseconds const& pos)
+void WavDecoder::set_buffer_position(std::chrono::milliseconds const& pos)
 {
-    m_impl->set_current_position(pos);
+    m_impl->set_buffer_position(pos);
 }
 
-std::chrono::milliseconds WavDecoder::get_current_position() const
+std::chrono::milliseconds WavDecoder::get_buffer_position() const
 {
-    return m_impl->get_current_position();
+    return m_impl->get_buffer_position();
 }

@@ -10,6 +10,9 @@ using namespace storm::audio;
 namespace
 {
 
+constexpr size_t STREAM_BUFFER_COUNT = 2;
+constexpr size_t BUFFER_SAMPLE_COUNT = 4096;
+
 class Tracer: public DebugTracer
 {
 public:
@@ -81,7 +84,7 @@ int main(int argc, char** argv)
     }
 
     auto tracer  = std::make_shared<Tracer>();
-    auto backend = std::make_unique<Backend>(tracer);
+    auto backend = std::make_unique<Backend>(tracer, STREAM_BUFFER_COUNT, BUFFER_SAMPLE_COUNT);
 
     if (std::string_view(argv[1]) == "--file") {
         play_file(*backend, Sound::Flags::Stereo2D, argv[2]);

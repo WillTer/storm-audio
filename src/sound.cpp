@@ -4,18 +4,24 @@
 #include <storm_audio/sound.h>
 
 #include "al_utils.h"
-#include "const.h"
 #include "format_helpers.h"
 
 using namespace storm::audio;
 
 struct Sound::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags)
+    Impl(
+        std::shared_ptr<DebugTracer> const& tracer,
+        std::unique_ptr<DataStream>&&       stream,
+        Flags                               flags,
+        size_t                              stream_buffer_count,
+        size_t                              buffer_sample_count)
         : m_tracer {tracer}
         , m_stream {std::move(stream)}
         , m_flags {flags}
+        , m_stream_buffer_count {stream_buffer_count}
+        , m_buffer_sample_count {buffer_sample_count}
     {
-        m_buffers.resize(is_flag_enabled(flags, Flags::Stream) ? STREAM_BUFFER_COUNT : 1);
+        m_buffers.resize(is_flag_enabled(flags, Flags::Stream) ? m_stream_buffer_count : 1);
 
         alGenBuffers(static_cast<int>(m_buffers.size()), m_buffers.data());
         AL_TRACE_ERRORS(m_tracer);
@@ -26,7 +32,8 @@ struct Sound::Impl {
         m_al_format   = convert_to_al_format(m_data_format, m_channels);
         m_sample_size = get_format_sample_size(m_data_format);
 
-        reset_buffers();
+        m_stream->seek_start();
+        prepare_buffer_data();
     }
 
     ~Impl()
@@ -61,7 +68,7 @@ struct Sound::Impl {
         m_attached_sources.erase(it);
     }
 
-    void prepare_buffer_data()
+    void prepare_buffer_data_full()
     {
         std::vector<char> buffer = {};
 
@@ -81,12 +88,12 @@ struct Sound::Impl {
 
     bool update_buffer(unsigned buffer, bool is_looping)
     {
-        auto samples = m_stream->get_samples(m_buffer_data, BUFFER_SAMPLE_COUNT);
+        auto samples = m_stream->get_samples(m_buffer_data, m_buffer_sample_count);
 
         // If nothing read and we're looping, read again, but from the start
         if (samples == 0 && is_looping) {
             m_stream->seek_start();
-            samples = m_stream->get_samples(m_buffer_data, BUFFER_SAMPLE_COUNT);
+            samples = m_stream->get_samples(m_buffer_data, m_buffer_sample_count);
         }
 
         // If still nothing read (or we're not looping), then just stop
@@ -98,23 +105,24 @@ struct Sound::Impl {
         return true;
     }
 
-    void reset_buffers()
+    void prepare_buffer_data()
     {
-        // Unbind buffers from all binded sources
-        detach_all_sources();
-
-        m_stream->seek_start();
-
         if (is_flag_enabled(m_flags, Flags::Stream)) {
             prepare_buffer_data_stream();
         } else {
-            prepare_buffer_data();
+            prepare_buffer_data_full();
         }
     }
 
-    DataStream& get_stream() const
+    void set_stream_buffer_position(std::chrono::milliseconds const& pos)
     {
-        return *m_stream;
+        m_stream->set_buffer_position(pos);
+        prepare_buffer_data_stream();
+    }
+
+    std::chrono::milliseconds get_stream_buffer_position() const
+    {
+        return m_stream->get_buffer_position();
     }
 
     void detach_all_sources()
@@ -137,6 +145,9 @@ struct Sound::Impl {
     Flags              m_flags;
     DataStream::Format m_data_format;
 
+    size_t m_stream_buffer_count;
+    size_t m_buffer_sample_count;
+
     ALenum m_al_format;
     int    m_channels;
     int    m_sample_rate;
@@ -149,8 +160,13 @@ struct Sound::Impl {
     std::vector<unsigned> m_attached_sources;
 };
 
-Sound::Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags)
-    : m_impl {std::make_unique<Impl>(tracer, std::move(stream), flags)}
+Sound::Sound(
+    std::shared_ptr<DebugTracer> const& tracer,
+    std::unique_ptr<DataStream>&&       stream,
+    Flags                               flags,
+    size_t                              stream_buffer_count,
+    size_t                              buffer_sample_count)
+    : m_impl {std::make_unique<Impl>(tracer, std::move(stream), flags, stream_buffer_count, buffer_sample_count)}
 {
 }
 
@@ -176,14 +192,14 @@ bool Sound::update_buffer(unsigned buffer, bool is_looping)
     return m_impl->update_buffer(buffer, is_looping);
 }
 
-void Sound::reset_buffers()
+void Sound::set_stream_buffer_position(std::chrono::milliseconds const& pos)
 {
-    m_impl->reset_buffers();
+    m_impl->set_stream_buffer_position(pos);
 }
 
-DataStream& Sound::get_stream() const
+std::chrono::milliseconds Sound::get_stream_buffer_position() const
 {
-    return m_impl->get_stream();
+    return m_impl->get_stream_buffer_position();
 }
 
 Sound::Flags Sound::get_flags() const

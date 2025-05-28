@@ -34,8 +34,8 @@ public:
 
     virtual void seek_start() = 0;
 
-    virtual void                      set_current_position(std::chrono::milliseconds const& pos) = 0;
-    virtual std::chrono::milliseconds get_current_position() const                               = 0;
+    virtual void                      set_buffer_position(std::chrono::milliseconds const& pos) = 0;
+    virtual std::chrono::milliseconds get_buffer_position() const                               = 0;
 };
 
 }  // namespace storm::audio

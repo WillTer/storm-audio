@@ -20,7 +20,12 @@ public:
         Spatial3D = 1 << 2,
     };
 
-    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream>&& stream, Flags flags);
+    Sound(
+        std::shared_ptr<DebugTracer> const& tracer,
+        std::unique_ptr<DataStream>&&       stream,
+        Flags                               flags,
+        size_t                              stream_buffer_count,
+        size_t                              buffer_sample_count);
     ~Sound();
 
     Flags get_flags() const;
@@ -34,9 +39,9 @@ private:
     int get_channels() const;
 
     bool update_buffer(unsigned buffer, bool is_looping);
-    void reset_buffers();
 
-    DataStream& get_stream() const;
+    void                      set_stream_buffer_position(std::chrono::milliseconds const& pos);
+    std::chrono::milliseconds get_stream_buffer_position() const;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

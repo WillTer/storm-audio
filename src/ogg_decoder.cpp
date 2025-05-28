@@ -6,7 +6,6 @@
 
 #include <vorbis/vorbisfile.h>
 
-#include "const.h"
 #include "format_helpers.h"
 
 using namespace storm::audio;
@@ -48,6 +47,7 @@ struct OggDecoder::Impl {
     Impl(std::shared_ptr<DebugTracer> const& tracer, Format format)
         : m_tracer {tracer}
         , m_is_valid {false}
+        , m_buffer_pos {std::chrono::milliseconds(0)}
         , m_channels {0}
         , m_sample_rate {0}
         , m_format {format}
@@ -84,6 +84,9 @@ struct OggDecoder::Impl {
 
     size_t get_samples(std::vector<char>& buffer, size_t sample_count)
     {
+        // Set time position BEFORE reading buffer, as we will get offset inside buffer later from OpenAL
+        update_buffer_position();
+
         auto const bytes_need = sample_count * m_sample_size * m_channels;
         buffer.resize(bytes_need);
 
@@ -119,11 +122,16 @@ struct OggDecoder::Impl {
 
     size_t get_samples_all(std::vector<char>& buffer_out)
     {
+        // Set time position BEFORE reading buffer, as we will get offset inside buffer later from OpenAL
+        update_buffer_position();
+
         std::vector<char> buffer        = {};
         size_t            total_samples = 0;
         size_t            samples_read  = 0;
 
-        while ((samples_read = get_samples(buffer, BUFFER_SAMPLE_COUNT)) > 0) {
+        constexpr size_t pass_sample_count = 4096;
+
+        while ((samples_read = get_samples(buffer, pass_sample_count)) > 0) {
             buffer_out.insert(buffer_out.end(), buffer.begin(), buffer.end());
             total_samples += samples_read;
         }
@@ -136,16 +144,22 @@ struct OggDecoder::Impl {
         ov_raw_seek(&m_stream, 0);
     }
 
-    void set_current_position(std::chrono::milliseconds const& pos)
+    void set_buffer_position(std::chrono::milliseconds const& pos)
     {
         double const pos_s = pos.count() / 1000.0;
         ov_time_seek(&m_stream, pos_s);
+        update_buffer_position();
     }
 
-    std::chrono::milliseconds get_current_position() const
+    std::chrono::milliseconds get_buffer_position() const
+    {
+        return m_buffer_pos;
+    }
+
+    void update_buffer_position()
     {
         double const pos_ms = ov_time_tell(&m_stream) * 1000.0;
-        return std::chrono::milliseconds(static_cast<int64_t>(pos_ms));
+        m_buffer_pos        = std::chrono::milliseconds(static_cast<int64_t>(pos_ms));
     }
 
     std::shared_ptr<DebugTracer> m_tracer;
@@ -154,6 +168,8 @@ struct OggDecoder::Impl {
 
     std::shared_ptr<std::FILE> m_file_handler;
     mutable OggVorbis_File     m_stream;
+
+    std::chrono::milliseconds m_buffer_pos;
 
     int    m_channels;
     int    m_sample_rate;
@@ -212,12 +228,12 @@ void OggDecoder::seek_start()
     m_impl->seek_start();
 }
 
-void OggDecoder::set_current_position(std::chrono::milliseconds const& pos)
+void OggDecoder::set_buffer_position(std::chrono::milliseconds const& pos)
 {
-    m_impl->set_current_position(pos);
+    m_impl->set_buffer_position(pos);
 }
 
-std::chrono::milliseconds OggDecoder::get_current_position() const
+std::chrono::milliseconds OggDecoder::get_buffer_position() const
 {
-    return m_impl->get_current_position();
+    return m_impl->get_buffer_position();
 }

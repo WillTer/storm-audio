@@ -28,8 +28,8 @@ public:
 
     void seek_start() override;
 
-    void                      set_current_position(std::chrono::milliseconds const& pos) override;
-    std::chrono::milliseconds get_current_position() const override;
+    void                      set_buffer_position(std::chrono::milliseconds const& pos) override;
+    std::chrono::milliseconds get_buffer_position() const override;
 
 private:
     struct Impl;

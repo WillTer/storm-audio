@@ -65,21 +65,18 @@ struct Source::Impl {
 
     SourceState get_state() const
     {
-        if (!m_sound) { return SourceState::Stopped; }
+        if (!m_sound) { return SourceState::Free; }
 
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
         AL_TRACE_ERRORS(m_tracer);
 
         switch (al_state) {
-        case AL_PLAYING: return SourceState::Playing;
+        case AL_INITIAL: [[fallthrough]];
         case AL_PAUSED: return SourceState::Paused;
-        case AL_STOPPED:
-            // Pretend to be playing if some lag occurs and we didn't update buffers in time
-            if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { return SourceState::Playing; }
-            return SourceState::Stopped;
-        case AL_INITIAL: return SourceState::Initial;
-        default: return SourceState::None;
+        case AL_PLAYING: return SourceState::Playing;
+        case AL_STOPPED: return SourceState::Stopped;
+        default: return SourceState::Free;
         }
     }
 
@@ -91,7 +88,10 @@ struct Source::Impl {
         }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
-            m_sound->get_stream().set_current_position(pos);
+            // We need to detach buffers from source to change buffers
+            m_sound->detach_buffers(m_source);
+            m_sound->set_stream_buffer_position(pos);
+            m_sound->attach_buffers(m_source);
         } else {
             alSourcef(m_source, AL_SEC_OFFSET, pos.count() / 1000.0F);
             AL_TRACE_ERRORS(m_tracer);
@@ -105,13 +105,14 @@ struct Source::Impl {
             return {};
         }
 
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { return m_sound->get_stream().get_current_position(); }
+        auto start_ms = std::chrono::milliseconds(0);
+        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { start_ms = m_sound->get_stream_buffer_position(); }
 
         ALfloat offset_s = 0;
         alGetSourcef(m_source, AL_SEC_OFFSET, &offset_s);
         AL_TRACE_ERRORS(m_tracer);
 
-        return std::chrono::milliseconds(static_cast<uint64_t>(offset_s * 1000));
+        return start_ms + std::chrono::milliseconds(static_cast<uint64_t>(offset_s * 1000));
     }
 
     void set_min_distance(float distance) const
@@ -232,7 +233,7 @@ struct Source::Impl {
         if (!m_sound) { return; }
 
         auto const state = get_state();
-        if (state == SourceState::Paused || state == SourceState::Initial) { return; }
+        if (state == SourceState::Paused) { return; }
 
         if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
             auto const updated = update_stream();

@@ -33,7 +33,10 @@ std::unique_ptr<DataStream> create_compatible_stream(
 }  // namespace
 
 struct Backend::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}
+    Impl(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count)
+        : m_tracer {tracer}
+        , m_stream_buffer_count {stream_buffer_count}
+        , m_buffer_sample_count {buffer_sample_count}
     {
         m_device = std::shared_ptr<ALCdevice>(alcOpenDevice(nullptr), [](ALCdevice* p) { alcCloseDevice(p); });  // Default device
         if (m_device == nullptr) { return; }
@@ -62,7 +65,7 @@ struct Backend::Impl {
         auto stream = create_compatible_stream(m_tracer, file_path, m_out_format);
         if (!stream || stream->load_file(file_path) != Result::Ok) { return nullptr; }
 
-        return std::make_shared<Sound>(m_tracer, std::move(stream), flags);
+        return std::make_shared<Sound>(m_tracer, std::move(stream), flags, m_stream_buffer_count, m_buffer_sample_count);
     }
 
     std::shared_ptr<Source> attach_sound(std::shared_ptr<Sound> const& sound)
@@ -71,16 +74,16 @@ struct Backend::Impl {
 
         std::shared_ptr<Source> source = nullptr;
 
-        auto const free_source = std::find_if(
-            m_sources.begin(), m_sources.end(), [](auto const& source) { return source->get_state() == SourceState::Stopped; });
+        auto const free_source =
+            std::find_if(m_sources.begin(), m_sources.end(), [](auto const& source) { return source->get_state() == SourceState::Free; });
 
         if (free_source != m_sources.end()) {
             source = *free_source;
             source->detach_sound();
         } else {
-            TRACE_INFO(m_tracer, "Add new audio source (current sources count: " + std::to_string(m_sources.size()) + ")");
             m_sources.push_back(std::make_shared<Source>(m_tracer));
             source = m_sources.back();
+            TRACE_INFO(m_tracer, "Add new audio source (current sources count: " + std::to_string(m_sources.size()) + ")");
         }
 
         source->attach_sound(sound);
@@ -119,12 +122,18 @@ struct Backend::Impl {
 
     std::vector<std::shared_ptr<Source>> m_sources;
 
+    size_t m_stream_buffer_count;
+    size_t m_buffer_sample_count;
+
     DataStream::Format m_out_format;
 
     bool m_is_valid;
 };
 
-Backend::Backend(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
+Backend::Backend(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count)
+    : m_impl {std::make_unique<Impl>(tracer, stream_buffer_count, buffer_sample_count)}
+{
+}
 Backend::~Backend() = default;
 
 std::shared_ptr<Sound> Backend::create_sound(std::filesystem::path const& file_path, Sound::Flags flags)

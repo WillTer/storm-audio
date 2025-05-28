@@ -45,6 +45,7 @@ constexpr std::string get_alc_error_text(ALCenum error)
 inline void al_trace_errors(storm::audio::DebugTracer& tracer, std::string const& filename, int line, std::string const& function)
 {
     if (auto err = alGetError(); err != AL_NO_ERROR) {
+        __debugbreak();
         tracer.trace_message(storm::audio::DebugTracer::Severity::Warn, "AL error: " + get_al_error_text(err), filename, line, function);
     }
 }
