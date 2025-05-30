@@ -15,17 +15,11 @@ class Sound final
 public:
     enum class Flags {
         None      = 0,
-        Stream    = 1 << 0,
-        Stereo2D  = 1 << 1,
-        Spatial3D = 1 << 2,
+        Stereo2D  = 1 << 0,
+        Spatial3D = 1 << 1,
     };
 
-    Sound(
-        std::shared_ptr<DebugTracer> const& tracer,
-        std::unique_ptr<DataStream>&&       stream,
-        Flags                               flags,
-        size_t                              stream_buffer_count,
-        size_t                              buffer_sample_count);
+    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags);
     ~Sound();
 
     Flags get_flags() const;
@@ -33,15 +27,10 @@ public:
 private:
     friend class Source;
 
-    void attach_buffers(unsigned source);
-    void detach_buffers(unsigned source);
+    void attach_source(unsigned source);
+    void detach_source(unsigned source);
 
     int get_channels() const;
-
-    bool update_buffer(unsigned buffer, bool is_looping);
-
-    void                      set_stream_buffer_position(std::chrono::milliseconds const& pos);
-    std::chrono::milliseconds get_stream_buffer_position() const;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

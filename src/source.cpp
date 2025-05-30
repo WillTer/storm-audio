@@ -1,13 +1,23 @@
 
 #include <algorithm>
+#include <variant>
 
 #include <storm_audio/sound.h>
+#include <storm_audio/sound_stream.h>
 #include <storm_audio/source.h>
 
 #include "al_utils.h"
 #include "trace_helpers.h"
 
 using namespace storm::audio;
+
+namespace
+{
+
+using SoundPtr       = std::shared_ptr<Sound>;
+using SoundStreamPtr = std::shared_ptr<SoundStream>;
+
+}  // namespace
 
 struct Source::Impl {
     Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}, m_is_looping {false}
@@ -30,7 +40,7 @@ struct Source::Impl {
 
     void play() const
     {
-        if (!m_sound) {
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
@@ -41,7 +51,7 @@ struct Source::Impl {
 
     void pause() const
     {
-        if (!m_sound) {
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
@@ -52,7 +62,7 @@ struct Source::Impl {
 
     void stop()
     {
-        if (!m_sound) {
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
@@ -65,7 +75,7 @@ struct Source::Impl {
 
     SourceState get_state() const
     {
-        if (!m_sound) { return SourceState::Free; }
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) { return SourceState::Free; }
 
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
@@ -82,16 +92,13 @@ struct Source::Impl {
 
     void set_playback_position(std::chrono::milliseconds const& pos) const
     {
-        if (!m_sound) {
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
-            // We need to detach buffers from source to change buffers
-            m_sound->detach_buffers(m_source);
-            m_sound->set_stream_buffer_position(pos);
-            m_sound->attach_buffers(m_source);
+        if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            std::get<SoundStreamPtr>(m_sound)->set_stream_buffer_position(pos);
         } else {
             alSourcef(m_source, AL_SEC_OFFSET, pos.count() / 1000.0F);
             AL_TRACE_ERRORS(m_tracer);
@@ -100,13 +107,13 @@ struct Source::Impl {
 
     std::chrono::milliseconds get_playback_position() const
     {
-        if (!m_sound) {
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return {};
         }
 
         auto start_ms = std::chrono::milliseconds(0);
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) { start_ms = m_sound->get_stream_buffer_position(); }
+        if (std::holds_alternative<SoundStreamPtr>(m_sound)) { start_ms = std::get<SoundStreamPtr>(m_sound)->get_stream_buffer_position(); }
 
         ALfloat offset_s = 0;
         alGetSourcef(m_source, AL_SEC_OFFSET, &offset_s);
@@ -160,6 +167,36 @@ struct Source::Impl {
         return volume_level;
     }
 
+    void set_volume_min(float volume_min)
+    {
+        alSourcef(m_source, AL_MIN_GAIN, std::clamp(volume_min, 0.0F, 1.0F));
+        AL_TRACE_ERRORS(m_tracer);
+    }
+
+    float get_volume_min() const
+    {
+        float volume_min = 0.0F;
+        alGetSourcef(m_source, AL_MIN_GAIN, &volume_min);
+        AL_TRACE_ERRORS(m_tracer);
+
+        return volume_min;
+    }
+
+    void set_volume_max(float volume_max)
+    {
+        alSourcef(m_source, AL_MAX_GAIN, std::clamp(volume_max, 0.0F, 1.0F));
+        AL_TRACE_ERRORS(m_tracer);
+    }
+
+    float get_volume_max() const
+    {
+        float volume_max = 0.0F;
+        alGetSourcef(m_source, AL_MAX_GAIN, &volume_max);
+        AL_TRACE_ERRORS(m_tracer);
+
+        return volume_max;
+    }
+
     void set_pitch(float pitch_level) const
     {
         alSourcef(m_source, AL_PITCH, std::clamp(pitch_level, 0.0F, 1.0F));
@@ -178,38 +215,15 @@ struct Source::Impl {
     void set_looping(bool flag)
     {
         m_is_looping = flag;
-        if (!m_sound) {
-            TRACE_WARN(m_tracer, "Source is empty");
-            return;
-        }
-
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
-            alSourcei(m_source, AL_LOOPING, AL_FALSE);
-        } else {
-            alSourcei(m_source, AL_LOOPING, flag ? AL_TRUE : AL_FALSE);
-        }
-
-        AL_TRACE_ERRORS(m_tracer);
     }
 
-    void attach_sound(std::shared_ptr<Sound> const& sound)
+    void reset_source_parameters(bool is_stereo)
     {
-        this->m_sound = sound;
-        sound->attach_buffers(m_source);
+        alSourcei(m_source, AL_SOURCE_RELATIVE, is_stereo ? AL_TRUE : AL_FALSE);
+        AL_TRACE_ERRORS(m_tracer);
 
-        if (is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D) && sound->get_channels() == 1) {
-            alSourcei(m_source, AL_SOURCE_RELATIVE, AL_TRUE);
-            AL_TRACE_ERRORS(m_tracer);
-
-            alSourcei(m_source, AL_ROLLOFF_FACTOR, 0);
-            AL_TRACE_ERRORS(m_tracer);
-        } else if (sound->get_channels() == 1) {
-            alSourcei(m_source, AL_SOURCE_RELATIVE, AL_FALSE);
-            AL_TRACE_ERRORS(m_tracer);
-
-            alSourcei(m_source, AL_ROLLOFF_FACTOR, 1);
-            AL_TRACE_ERRORS(m_tracer);
-        }
+        alSourcei(m_source, AL_ROLLOFF_FACTOR, is_stereo ? 0 : 1);
+        AL_TRACE_ERRORS(m_tracer);
 
         // Reset 3D data
         set_position_3d({0, 0, -1});
@@ -217,26 +231,52 @@ struct Source::Impl {
         set_velocity_3d({});
     }
 
+    void attach_sound(std::shared_ptr<Sound> const& sound)
+    {
+        this->m_sound = sound;
+        sound->attach_source(m_source);
+
+        alSourcei(m_source, AL_LOOPING, m_is_looping ? AL_TRUE : AL_FALSE);
+        AL_TRACE_ERRORS(m_tracer);
+
+        reset_source_parameters(is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D));
+    }
+
+    void attach_sound_stream(std::shared_ptr<SoundStream> const& sound)
+    {
+        this->m_sound = sound;
+        sound->attach_source(m_source);
+
+        // Always disable looping for streaming sounds as we don't need to loop one buffer
+        alSourcei(m_source, AL_LOOPING, AL_FALSE);
+        AL_TRACE_ERRORS(m_tracer);
+
+        reset_source_parameters(is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D));
+    }
+
     void detach_sound()
     {
         alSourcei(m_source, AL_BUFFER, 0);
         AL_TRACE_ERRORS(m_tracer);
 
-        if (m_sound) {
-            m_sound->detach_buffers(m_source);
-            m_sound.reset();
+        if (std::holds_alternative<SoundPtr>(m_sound)) {
+            std::get<SoundPtr>(m_sound)->detach_source(m_source);
+        } else if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            std::get<SoundStreamPtr>(m_sound)->detach_source();
         }
+
+        m_sound = nullptr;
     }
 
-    void internal_update()
+    void update()
     {
-        if (!m_sound) { return; }
+        if (std::holds_alternative<nullptr_t>(m_sound)) { return; }
 
         auto const state = get_state();
         if (state == SourceState::Paused) { return; }
 
-        if (is_flag_enabled(m_sound->get_flags(), Sound::Flags::Stream)) {
-            auto const updated = update_stream();
+        if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            auto const updated = std::get<SoundStreamPtr>(m_sound)->update(m_is_looping);
             if (state == SourceState::Playing) { return; }
 
             // If sound is existing and we have data for it, then it's wasn't stopped by a program
@@ -251,34 +291,12 @@ struct Source::Impl {
         }
     }
 
-    size_t update_stream() const
-    {
-        ALint processed = 0;
-        alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &processed);
-        AL_TRACE_ERRORS(m_tracer);
-
-        size_t updated = 0;
-        for (ALint i = 0; i < processed; ++i) {
-            ALuint buffer = 0;
-            alSourceUnqueueBuffers(m_source, 1, &buffer);
-            AL_TRACE_ERRORS(m_tracer);
-
-            if (m_sound->update_buffer(buffer, m_is_looping)) {
-                alSourceQueueBuffers(m_source, 1, &buffer);
-                AL_TRACE_ERRORS(m_tracer);
-                ++updated;
-            }
-        }
-
-        return updated;
-    }
-
     std::shared_ptr<DebugTracer> m_tracer;
 
     unsigned m_source;
     bool     m_is_looping;
 
-    std::shared_ptr<Sound> m_sound;
+    std::variant<std::nullptr_t, SoundPtr, SoundStreamPtr> m_sound;
 };
 
 Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
@@ -334,9 +352,9 @@ void Source::set_velocity_3d(std::array<float, 3> const& velocity)
     m_impl->set_velocity_3d(velocity);
 }
 
-void Source::set_direction_3d(std::array<float, 3> const& orientation)
+void Source::set_direction_3d(std::array<float, 3> const& direction)
 {
-    m_impl->set_direction_3d(orientation);
+    m_impl->set_direction_3d(direction);
 }
 
 void Source::set_volume(float volume_level)
@@ -347,6 +365,26 @@ void Source::set_volume(float volume_level)
 float Source::get_volume() const
 {
     return m_impl->get_volume();
+}
+
+void Source::set_volume_min(float volume_min)
+{
+    m_impl->set_volume_min(volume_min);
+}
+
+float Source::get_volume_min() const
+{
+    return m_impl->get_volume_min();
+}
+
+void Source::set_volume_max(float volume_max)
+{
+    m_impl->set_volume_max(volume_max);
+}
+
+float Source::get_volume_max() const
+{
+    return m_impl->get_volume_max();
 }
 
 void Source::set_pitch(float pitch_level)
@@ -369,12 +407,17 @@ void Source::attach_sound(std::shared_ptr<Sound> const& sound)
     m_impl->attach_sound(sound);
 }
 
+void Source::attach_sound_stream(std::shared_ptr<SoundStream> const& sound)
+{
+    m_impl->attach_sound_stream(sound);
+}
+
 void Source::detach_sound()
 {
     m_impl->detach_sound();
 }
 
-void Source::internal_update()
+void Source::update()
 {
-    m_impl->internal_update();
+    m_impl->update();
 }

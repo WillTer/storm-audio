@@ -3,8 +3,6 @@
 #include <cstring>
 #include <vector>
 
-#include <AL/al.h>
-
 using namespace storm::audio;
 
 namespace

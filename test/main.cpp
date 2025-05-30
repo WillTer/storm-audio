@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <thread>
 
-#include <storm_audio/backend.h>
+#include <storm_audio/device.h>
 #include <storm_audio/source.h>
 
 using namespace storm::audio;
@@ -44,31 +44,45 @@ void print_usage(std::string_view const& app_path)
     printf("\t--dir\t\tPlay all files in directory as stream (non-recursive)\n");
 }
 
-void play_file(Backend& backend, Sound::Flags flags, std::filesystem::path const& file)
+void play_file(Device& device, Sound::Flags flags, std::filesystem::path const& file)
 {
-    auto const sound  = backend.create_sound(file, flags);
-    auto const source = backend.attach_sound(sound);
+    auto const sound  = device.create_sound(file, flags);
+    auto const source = device.attach_sound(sound);
     source->set_looping(true);
     source->play();
 
     constexpr auto pause = std::chrono::milliseconds(10);
     while (true) {
-        backend.update();
+        device.update();
         std::this_thread::sleep_for(pause);
     }
 }
 
-void play_dir(Backend& backend, Sound::Flags flags, std::filesystem::path const& dir)
+void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path const& file)
+{
+    auto const sound  = device.create_sound_stream(file, flags);
+    auto const source = device.attach_sound_stream(sound);
+    source->set_looping(true);
+    source->play();
+
+    constexpr auto pause = std::chrono::milliseconds(10);
+    while (true) {
+        device.update();
+        std::this_thread::sleep_for(pause);
+    }
+}
+
+void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& dir)
 {
     for (auto const& file: std::filesystem::directory_iterator(dir)) {
-        auto const sound  = backend.create_sound(file.path(), flags);
-        auto const source = backend.attach_sound(sound);
+        auto const sound  = device.create_sound_stream(file.path(), flags);
+        auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
         source->play();
 
         constexpr auto pause = std::chrono::milliseconds(10);
-        while (source->get_state() != SourceState::Stopped) {
-            backend.update();
+        while (source->get_state() != SourceState::Free) {
+            device.update();
             std::this_thread::sleep_for(pause);
         }
     }
@@ -83,15 +97,15 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    auto tracer  = std::make_shared<Tracer>();
-    auto backend = std::make_unique<Backend>(tracer, STREAM_BUFFER_COUNT, BUFFER_SAMPLE_COUNT);
+    auto tracer = std::make_shared<Tracer>();
+    auto device = std::make_unique<Device>(tracer, STREAM_BUFFER_COUNT, BUFFER_SAMPLE_COUNT);
 
     if (std::string_view(argv[1]) == "--file") {
-        play_file(*backend, Sound::Flags::Stereo2D, argv[2]);
+        play_file(*device, Sound::Flags::Stereo2D, argv[2]);
     } else if (std::string_view(argv[1]) == "--file-stream") {
-        play_file(*backend, Sound::Flags::Stereo2D | Sound::Flags::Stream, argv[2]);
+        play_file_stream(*device, Sound::Flags::Stereo2D, argv[2]);
     } else if (std::string_view(argv[1]) == "--dir") {
-        play_dir(*backend, Sound::Flags::Stereo2D | Sound::Flags::Stream, argv[2]);
+        play_dir(*device, Sound::Flags::Stereo2D, argv[2]);
     } else {
         print_usage(argv[0]);
         return -1;

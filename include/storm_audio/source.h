@@ -10,6 +10,7 @@ namespace storm::audio
 enum class SourceState { Free, Playing, Paused, Stopped };
 
 class Sound;
+class SoundStream;
 class DebugTracer;
 
 class Source final
@@ -32,10 +33,16 @@ public:
 
     void set_position_3d(std::array<float, 3> const& position);
     void set_velocity_3d(std::array<float, 3> const& velocity);
-    void set_direction_3d(std::array<float, 3> const& orientation);
+    void set_direction_3d(std::array<float, 3> const& direction);
 
     void  set_volume(float volume_level);
     float get_volume() const;
+
+    void  set_volume_min(float volume_min);
+    float get_volume_min() const;
+
+    void  set_volume_max(float volume_max);
+    float get_volume_max() const;
 
     void  set_pitch(float pitch_level);
     float get_pitch() const;
@@ -43,12 +50,13 @@ public:
     void set_looping(bool flag);
 
 private:
-    friend class Backend;
+    friend class Device;
 
     void attach_sound(std::shared_ptr<Sound> const& sound);
+    void attach_sound_stream(std::shared_ptr<SoundStream> const& sound);
     void detach_sound();
 
-    void internal_update();
+    void update();
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;
