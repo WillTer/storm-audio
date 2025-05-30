@@ -215,10 +215,20 @@ struct Source::Impl {
     void set_looping(bool flag)
     {
         m_is_looping = flag;
+
+        if (std::holds_alternative<SoundPtr>(m_sound)) {
+            alSourcei(m_source, AL_LOOPING, m_is_looping ? AL_TRUE : AL_FALSE);
+            AL_TRACE_ERRORS(m_tracer);
+        }
     }
 
     void reset_source_parameters(bool is_stereo)
     {
+        m_is_looping = false;
+
+        alSourcei(m_source, AL_LOOPING, AL_FALSE);
+        AL_TRACE_ERRORS(m_tracer);
+
         alSourcei(m_source, AL_SOURCE_RELATIVE, is_stereo ? AL_TRUE : AL_FALSE);
         AL_TRACE_ERRORS(m_tracer);
 
@@ -231,25 +241,11 @@ struct Source::Impl {
         set_velocity_3d({});
     }
 
-    void attach_sound(std::shared_ptr<Sound> const& sound)
+    template<typename T>
+    void attach(T const& sound)
     {
         this->m_sound = sound;
         sound->attach_source(m_source);
-
-        alSourcei(m_source, AL_LOOPING, m_is_looping ? AL_TRUE : AL_FALSE);
-        AL_TRACE_ERRORS(m_tracer);
-
-        reset_source_parameters(is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D));
-    }
-
-    void attach_sound_stream(std::shared_ptr<SoundStream> const& sound)
-    {
-        this->m_sound = sound;
-        sound->attach_source(m_source);
-
-        // Always disable looping for streaming sounds as we don't need to loop one buffer
-        alSourcei(m_source, AL_LOOPING, AL_FALSE);
-        AL_TRACE_ERRORS(m_tracer);
 
         reset_source_parameters(is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D));
     }
@@ -270,7 +266,7 @@ struct Source::Impl {
 
     void update()
     {
-        if (std::holds_alternative<nullptr_t>(m_sound)) { return; }
+        if (std::holds_alternative<std::nullptr_t>(m_sound)) { return; }
 
         auto const state = get_state();
         if (state == SourceState::Paused) { return; }
@@ -404,12 +400,12 @@ void Source::set_looping(bool flag)
 
 void Source::attach_sound(std::shared_ptr<Sound> const& sound)
 {
-    m_impl->attach_sound(sound);
+    m_impl->attach(sound);
 }
 
 void Source::attach_sound_stream(std::shared_ptr<SoundStream> const& sound)
 {
-    m_impl->attach_sound_stream(sound);
+    m_impl->attach(sound);
 }
 
 void Source::detach_sound()

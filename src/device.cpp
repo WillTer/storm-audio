@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstring>
 #include <vector>
 
 #include <AL/al.h>
@@ -50,6 +51,9 @@ struct Device::Impl {
         if (m_context == nullptr) { return; }
 
         alcMakeContextCurrent(m_context.get());
+        ALC_TRACE_ERRORS(tracer, m_device.get());
+
+        alDistanceModel(AL_EXPONENT_DISTANCE);  // TODO: input parameter
         ALC_TRACE_ERRORS(tracer, m_device.get());
 
         m_out_format = DataStream::Format::Int16;
