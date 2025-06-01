@@ -17,10 +17,11 @@ struct Sound::Impl {
         AL_TRACE_ERRORS(m_tracer);
 
         m_sample_rate = stream->get_sample_rate();
-        m_channels    = stream->get_channels();
+        m_channels    = is_flag_enabled(m_flags, Flags::Spatial3D) ? 1 : stream->get_channels();
         m_al_format   = convert_to_al_format(stream->get_data_format(), m_channels);
+        m_sample_size = get_format_sample_size(stream->get_data_format());
 
-        prepare_buffer_data(stream);
+        prepare_buffer_data(stream, stream->get_channels());
     }
 
     ~Impl()
@@ -51,12 +52,24 @@ struct Sound::Impl {
         m_attached_sources.erase(it);
     }
 
-    void prepare_buffer_data(std::unique_ptr<DataStream> const& stream)
+    void prepare_buffer_data(std::unique_ptr<DataStream> const& stream, int pcm_channels)
     {
         std::vector<char> buffer = {};
 
         auto const samples = stream->get_samples_all(buffer);
         if (samples == 0) { return; }
+
+        // OpenAL doesn't support 3D effects for audio with more than one channel, so remove excess channel data manually
+        if (is_flag_enabled(m_flags, Flags::Spatial3D) && pcm_channels > 1) {
+            std::vector<char> mono_buffer = {};
+            mono_buffer.resize(buffer.size() / pcm_channels);
+
+            // No mixing, just use left channel data for simplicity
+            for (size_t offset = 0; offset < mono_buffer.size(); offset += m_sample_size) {
+                std::memcpy(mono_buffer.data() + offset, buffer.data() + (offset * m_sample_size), m_sample_size);
+            }
+            mono_buffer.swap(buffer);
+        }
 
         alBufferData(m_buffer, m_al_format, buffer.data(), static_cast<int>(buffer.size()), m_sample_rate);
         AL_TRACE_ERRORS(m_tracer);
@@ -83,6 +96,8 @@ struct Sound::Impl {
     ALenum m_al_format;
     int    m_channels;
     int    m_sample_rate;
+
+    size_t m_sample_size;
 
     unsigned              m_buffer;
     std::vector<unsigned> m_attached_sources;

@@ -161,7 +161,7 @@ struct Source::Impl {
 
     void set_volume(float volume_level) const
     {
-        alSourcef(m_source, AL_GAIN, std::clamp(volume_level, 0.0F, 1.0F));
+        alSourcef(m_source, AL_GAIN, std::max(volume_level, 0.0F));
         AL_TRACE_ERRORS(m_tracer);
     }
 
