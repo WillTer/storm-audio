@@ -34,7 +34,7 @@ std::unique_ptr<DataStream> create_compatible_stream(
 }  // namespace
 
 struct Device::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count)
+    Impl(std::shared_ptr<DebugTracer> const& tracer, DistanceModel distance_model, size_t stream_buffer_count, size_t buffer_sample_count)
         : m_tracer {tracer}
         , m_stream_buffer_count {stream_buffer_count}
         , m_buffer_sample_count {buffer_sample_count}
@@ -53,8 +53,13 @@ struct Device::Impl {
         alcMakeContextCurrent(m_context.get());
         ALC_TRACE_ERRORS(tracer, m_device.get());
 
-        alDistanceModel(AL_EXPONENT_DISTANCE);  // TODO: input parameter
-        ALC_TRACE_ERRORS(tracer, m_device.get());
+        switch (distance_model) {
+        case DistanceModel::None: alDistanceModel(AL_NONE); break;
+        case DistanceModel::Inverse: alDistanceModel(AL_INVERSE_DISTANCE_CLAMPED); break;
+        case DistanceModel::Linear: alDistanceModel(AL_LINEAR_DISTANCE_CLAMPED); break;
+        case DistanceModel::Exponent: alDistanceModel(AL_EXPONENT_DISTANCE_CLAMPED); break;
+        }
+        AL_TRACE_ERRORS(tracer);
 
         m_out_format = DataStream::Format::Int16;
         m_is_valid   = true;
@@ -125,10 +130,10 @@ struct Device::Impl {
         AL_TRACE_ERRORS(m_tracer);
     }
 
-    void update()
+    void update(std::chrono::milliseconds const& elapsed)
     {
         for (auto& source: m_sources) {
-            source->update();
+            source->update(elapsed);
         }
     }
 
@@ -162,8 +167,12 @@ struct Device::Impl {
     bool m_is_valid;
 };
 
-Device::Device(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count)
-    : m_impl {std::make_unique<Impl>(tracer, stream_buffer_count, buffer_sample_count)}
+Device::Device(
+    std::shared_ptr<DebugTracer> const& tracer,
+    DistanceModel                       distance_model /*= DistanceModel::Inverse*/,
+    size_t                              stream_buffer_count /*= DEFAULT_BUFFER_COUNT*/,
+    size_t                              buffer_sample_count /*= DEFAULT_BUFFER_SAMPLE_COUNT*/)
+    : m_impl {std::make_unique<Impl>(tracer, distance_model, stream_buffer_count, buffer_sample_count)}
 {
 }
 Device::~Device() = default;
@@ -217,7 +226,7 @@ void Device::set_listener_orientation_3d(std::array<float, 3> const& at, std::ar
     m_impl->set_listener_orientation_3d(at, up);
 }
 
-void Device::update()
+void Device::update(std::chrono::milliseconds const& elapsed)
 {
-    m_impl->update();
+    m_impl->update(elapsed);
 }

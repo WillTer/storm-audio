@@ -49,6 +49,8 @@ public:
 
     void set_looping(bool flag);
 
+    void fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration);
+
 private:
     friend class Device;
 
@@ -56,7 +58,7 @@ private:
     void attach_sound_stream(std::shared_ptr<SoundStream> const& sound);
     void detach_sound();
 
-    void update();
+    void update(std::chrono::milliseconds const& elapsed);
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

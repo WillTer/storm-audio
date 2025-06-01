@@ -12,10 +12,20 @@ namespace storm::audio
 class Source;
 class DebugTracer;
 
+constexpr size_t DEFAULT_BUFFER_COUNT        = 2;
+constexpr size_t DEFAULT_BUFFER_SAMPLE_COUNT = 2048;
+
 class Device final
 {
 public:
-    Device(std::shared_ptr<DebugTracer> const& tracer, size_t stream_buffer_count, size_t buffer_sample_count);
+    // All models (except None) are clamped
+    enum class DistanceModel { None, Inverse, Linear, Exponent };
+
+    Device(
+        std::shared_ptr<DebugTracer> const& tracer,
+        DistanceModel                       distance_model      = DistanceModel::Inverse,
+        size_t                              stream_buffer_count = DEFAULT_BUFFER_COUNT,
+        size_t                              buffer_sample_count = DEFAULT_BUFFER_SAMPLE_COUNT);
     ~Device();
 
     std::shared_ptr<Sound>       create_sound(std::filesystem::path const& file_path, Sound::Flags flags);
@@ -27,7 +37,7 @@ public:
     void set_listener_velocity_3d(std::array<float, 3> const& velocity);
     void set_listener_orientation_3d(std::array<float, 3> const& at, std::array<float, 3> const& up);
 
-    void update();
+    void update(std::chrono::milliseconds const& elapsed);
 
 private:
     struct Impl;

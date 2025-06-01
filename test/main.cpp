@@ -10,9 +10,6 @@ using namespace storm::audio;
 namespace
 {
 
-constexpr size_t STREAM_BUFFER_COUNT = 2;
-constexpr size_t BUFFER_SAMPLE_COUNT = 4096;
-
 class Tracer: public DebugTracer
 {
 public:
@@ -53,8 +50,8 @@ void play_file(Device& device, Sound::Flags flags, std::filesystem::path const& 
 
     constexpr auto pause = std::chrono::milliseconds(10);
     while (true) {
-        device.update();
         std::this_thread::sleep_for(pause);
+        device.update(pause);
     }
 }
 
@@ -67,8 +64,8 @@ void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path 
 
     constexpr auto pause = std::chrono::milliseconds(10);
     while (true) {
-        device.update();
         std::this_thread::sleep_for(pause);
+        device.update(pause);
     }
 }
 
@@ -78,12 +75,13 @@ void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& d
         auto const sound  = device.create_sound_stream(file.path(), flags);
         auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
+        source->fade(0.0F, 1.0F, std::chrono::milliseconds(2000));
         source->play();
 
         constexpr auto pause = std::chrono::milliseconds(10);
         while (source->get_state() != SourceState::Free) {
-            device.update();
             std::this_thread::sleep_for(pause);
+            device.update(pause);
         }
     }
 }
@@ -98,7 +96,7 @@ int main(int argc, char** argv)
     }
 
     auto tracer = std::make_shared<Tracer>();
-    auto device = std::make_unique<Device>(tracer, STREAM_BUFFER_COUNT, BUFFER_SAMPLE_COUNT);
+    auto device = std::make_unique<Device>(tracer);
 
     if (std::string_view(argv[1]) == "--file") {
         play_file(*device, Sound::Flags::Stereo2D, argv[2]);

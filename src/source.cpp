@@ -20,7 +20,13 @@ using SoundStreamPtr = std::shared_ptr<SoundStream>;
 }  // namespace
 
 struct Source::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}, m_is_looping {false}
+    Impl(std::shared_ptr<DebugTracer> const& tracer)
+        : m_tracer {tracer}
+        , m_is_looping {false}
+        , m_fade_start_volume {1.0F}
+        , m_fade_end_volume {1.0F}
+        , m_fade_duration {std::chrono::milliseconds(0)}
+        , m_fade_elapsed {std::chrono::milliseconds(0)}
     {
         alGenSources(1, &m_source);
         AL_TRACE_ERRORS(m_tracer);
@@ -222,6 +228,13 @@ struct Source::Impl {
         }
     }
 
+    void fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration)
+    {
+        m_fade_start_volume = std::clamp(start_volume, 0.0F, 1.0F);
+        m_fade_end_volume   = std::clamp(end_volume, 0.0F, 1.0F);
+        m_fade_duration     = duration;
+    }
+
     void reset_source_parameters(bool is_stereo)
     {
         m_is_looping = false;
@@ -241,7 +254,7 @@ struct Source::Impl {
         set_velocity_3d({});
     }
 
-    template<typename T>
+    template <typename T>
     void attach(T const& sound)
     {
         this->m_sound = sound;
@@ -264,12 +277,29 @@ struct Source::Impl {
         m_sound = nullptr;
     }
 
-    void update()
+    void update(std::chrono::milliseconds const& elapsed)
     {
         if (std::holds_alternative<std::nullptr_t>(m_sound)) { return; }
 
         auto const state = get_state();
         if (state == SourceState::Paused) { return; }
+
+        if (m_fade_duration > std::chrono::milliseconds(0)) {
+            m_fade_elapsed += elapsed;
+
+            if (m_fade_duration > m_fade_elapsed) {
+                auto const  volume_mult = static_cast<float>(m_fade_elapsed.count()) / m_fade_duration.count();
+                float const volume      = std::lerp(m_fade_start_volume, m_fade_end_volume, volume_mult);
+                set_volume_max(volume);
+            } else {
+                set_volume_max(m_fade_end_volume);
+
+                m_fade_start_volume = 1.0F;
+                m_fade_end_volume   = 1.0F;
+                m_fade_duration     = std::chrono::milliseconds(0);
+                m_fade_elapsed      = std::chrono::milliseconds(0);
+            }
+        }
 
         if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
             auto const updated = std::get<SoundStreamPtr>(m_sound)->update(m_is_looping);
@@ -293,6 +323,11 @@ struct Source::Impl {
     bool     m_is_looping;
 
     std::variant<std::nullptr_t, SoundPtr, SoundStreamPtr> m_sound;
+
+    float                     m_fade_start_volume;
+    float                     m_fade_end_volume;
+    std::chrono::milliseconds m_fade_duration;
+    std::chrono::milliseconds m_fade_elapsed;
 };
 
 Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
@@ -398,6 +433,11 @@ void Source::set_looping(bool flag)
     m_impl->set_looping(flag);
 }
 
+void Source::fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration)
+{
+    m_impl->fade(start_volume, end_volume, duration);
+}
+
 void Source::attach_sound(std::shared_ptr<Sound> const& sound)
 {
     m_impl->attach(sound);
@@ -413,7 +453,7 @@ void Source::detach_sound()
     m_impl->detach_sound();
 }
 
-void Source::update()
+void Source::update(std::chrono::milliseconds const& elapsed)
 {
-    m_impl->update();
+    m_impl->update(elapsed);
 }
