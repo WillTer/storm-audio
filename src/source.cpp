@@ -1,6 +1,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <variant>
 
 #include <storm_audio/sound.h>
