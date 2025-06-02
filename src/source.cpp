@@ -18,16 +18,20 @@ namespace
 using SoundPtr       = std::shared_ptr<Sound>;
 using SoundStreamPtr = std::shared_ptr<SoundStream>;
 
+struct Fader {
+    float                     start_volume;
+    float                     end_volume;
+    std::chrono::milliseconds duration;
+    std::chrono::milliseconds elapsed;
+
+    // For pause and stop after fade
+    SourceState target_state;
+};
+
 }  // namespace
 
 struct Source::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer)
-        : m_tracer {tracer}
-        , m_is_looping {false}
-        , m_fade_start_volume {1.0F}
-        , m_fade_end_volume {1.0F}
-        , m_fade_duration {std::chrono::milliseconds(0)}
-        , m_fade_elapsed {std::chrono::milliseconds(0)}
+    Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}, m_is_looping {false}
     {
         alGenSources(1, &m_source);
         AL_TRACE_ERRORS(m_tracer);
@@ -45,7 +49,7 @@ struct Source::Impl {
         AL_TRACE_ERRORS(m_tracer);
     }
 
-    void play() const
+    void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
@@ -54,30 +58,60 @@ struct Source::Impl {
 
         alSourcePlay(m_source);
         AL_TRACE_ERRORS(m_tracer);
+
+        if (fade_duration.count() > 0) {
+            m_fader = Fader {
+                .start_volume = start_volume,
+                .end_volume   = end_volume,
+                .duration     = fade_duration,
+                .elapsed      = {},
+                .target_state = SourceState::Playing,
+            };
+        }
     }
 
-    void pause() const
+    void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
-        alSourcePause(m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        if (fade_duration.count() > 0) {
+            m_fader = Fader {
+                .start_volume = start_volume,
+                .end_volume   = end_volume,
+                .duration     = fade_duration,
+                .elapsed      = {},
+                .target_state = SourceState::Paused,
+            };
+        } else {
+            alSourcePause(m_source);
+            AL_TRACE_ERRORS(m_tracer);
+        }
     }
 
-    void stop()
+    void stop(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (std::holds_alternative<std::nullptr_t>(m_sound)) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
-        alSourceStop(m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        if (fade_duration.count() > 0) {
+            m_fader = Fader {
+                .start_volume = start_volume,
+                .end_volume   = end_volume,
+                .duration     = fade_duration,
+                .elapsed      = {},
+                .target_state = SourceState::Stopped,
+            };
+        } else {
+            alSourceStop(m_source);
+            AL_TRACE_ERRORS(m_tracer);
 
-        detach_sound();
+            detach_sound();
+        }
     }
 
     SourceState get_state() const
@@ -244,13 +278,6 @@ struct Source::Impl {
         }
     }
 
-    void fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration)
-    {
-        m_fade_start_volume = std::clamp(start_volume, 0.0F, 1.0F);
-        m_fade_end_volume   = std::clamp(end_volume, 0.0F, 1.0F);
-        m_fade_duration     = duration;
-    }
-
     void reset_source_parameters(bool is_stereo)
     {
         m_is_looping = false;
@@ -300,22 +327,7 @@ struct Source::Impl {
         auto const state = get_state();
         if (state == SourceState::Paused) { return; }
 
-        if (m_fade_duration > std::chrono::milliseconds(0)) {
-            m_fade_elapsed += elapsed;
-
-            if (m_fade_duration > m_fade_elapsed) {
-                auto const  volume_mult = static_cast<float>(m_fade_elapsed.count()) / m_fade_duration.count();
-                float const volume      = std::lerp(m_fade_start_volume, m_fade_end_volume, volume_mult);
-                set_volume(volume);
-            } else {
-                set_volume(m_fade_end_volume);
-
-                m_fade_start_volume = 1.0F;
-                m_fade_end_volume   = 1.0F;
-                m_fade_duration     = std::chrono::milliseconds(0);
-                m_fade_elapsed      = std::chrono::milliseconds(0);
-            }
-        }
+        process_fader(elapsed);
 
         if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
             auto const updated = std::get<SoundStreamPtr>(m_sound)->update(m_is_looping);
@@ -333,6 +345,30 @@ struct Source::Impl {
         }
     }
 
+    void process_fader(std::chrono::milliseconds const& elapsed)
+    {
+        if (!m_fader.has_value()) { return; }
+
+        auto& fader = m_fader.value();
+        fader.elapsed += elapsed;
+
+        if (fader.duration > fader.elapsed) {
+            auto const  t      = static_cast<float>(fader.elapsed.count()) / fader.duration.count();
+            float const volume = std::lerp(fader.start_volume, fader.end_volume, t);
+            set_volume(volume);
+        } else {
+            set_volume(fader.end_volume);
+
+            switch (fader.target_state) {
+            case SourceState::Paused: pause();
+            case SourceState::Stopped: stop();
+            default: break;
+            }
+
+            m_fader = std::nullopt;
+        }
+    }
+
     std::shared_ptr<DebugTracer> m_tracer;
 
     unsigned m_source;
@@ -340,28 +376,25 @@ struct Source::Impl {
 
     std::variant<std::nullptr_t, SoundPtr, SoundStreamPtr> m_sound;
 
-    float                     m_fade_start_volume;
-    float                     m_fade_end_volume;
-    std::chrono::milliseconds m_fade_duration;
-    std::chrono::milliseconds m_fade_elapsed;
+    std::optional<Fader> m_fader;
 };
 
 Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
 Source::~Source() = default;
 
-void Source::play()
+void Source::play(float start_volume /*= 1.0F*/, float end_volume /*= 1.0F*/, std::chrono::milliseconds const& fade_duration /*= {}*/)
 {
-    m_impl->play();
+    m_impl->play(start_volume, end_volume, fade_duration);
 }
 
-void Source::pause()
+void Source::pause(float start_volume /*= 1.0F*/, float end_volume /*= 1.0F*/, std::chrono::milliseconds const& fade_duration /*= {}*/)
 {
-    m_impl->pause();
+    m_impl->pause(start_volume, end_volume, fade_duration);
 }
 
-void Source::stop()
+void Source::stop(float start_volume /*= 1.0F*/, float end_volume /*= 1.0F*/, std::chrono::milliseconds const& fade_duration /*= {}*/)
 {
-    m_impl->stop();
+    m_impl->stop(start_volume, end_volume, fade_duration);
 }
 
 SourceState Source::get_state() const
@@ -457,11 +490,6 @@ float Source::get_pitch() const
 void Source::set_looping(bool flag)
 {
     m_impl->set_looping(flag);
-}
-
-void Source::fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration)
-{
-    m_impl->fade(start_volume, end_volume, duration);
 }
 
 void Source::attach_sound(std::shared_ptr<Sound> const& sound)

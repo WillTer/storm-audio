@@ -19,9 +19,9 @@ public:
     Source(std::shared_ptr<DebugTracer> const& tracer);
     ~Source();
 
-    void play();
-    void pause();
-    void stop();
+    void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
+    void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
+    void stop(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
 
     SourceState get_state() const;
 
@@ -51,8 +51,6 @@ public:
     float get_pitch() const;
 
     void set_looping(bool flag);
-
-    void fade(float start_volume, float end_volume, std::chrono::milliseconds const& duration);
 
 private:
     friend class Device;
