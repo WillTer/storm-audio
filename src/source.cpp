@@ -56,10 +56,9 @@ struct Source::Impl {
             return;
         }
 
-        alSourcePlay(m_source);
-        AL_TRACE_ERRORS(m_tracer);
-
         if (fade_duration.count() > 0) {
+            set_volume(start_volume);
+
             m_fader = Fader {
                 .start_volume = start_volume,
                 .end_volume   = end_volume,
@@ -67,7 +66,13 @@ struct Source::Impl {
                 .elapsed      = {},
                 .target_state = SourceState::Playing,
             };
+        } else {
+            // Set end volume if not fading
+            set_volume(end_volume);
         }
+
+        alSourcePlay(m_source);
+        AL_TRACE_ERRORS(m_tracer);
     }
 
     void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
@@ -78,6 +83,8 @@ struct Source::Impl {
         }
 
         if (fade_duration.count() > 0) {
+            set_volume(start_volume);
+
             m_fader = Fader {
                 .start_volume = start_volume,
                 .end_volume   = end_volume,
@@ -99,6 +106,8 @@ struct Source::Impl {
         }
 
         if (fade_duration.count() > 0) {
+            set_volume(start_volume);
+
             m_fader = Fader {
                 .start_volume = start_volume,
                 .end_volume   = end_volume,
