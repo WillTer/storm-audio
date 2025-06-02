@@ -159,6 +159,21 @@ struct Source::Impl {
         AL_TRACE_ERRORS(m_tracer);
     }
 
+    void set_rolloff(float factor)
+    {
+        alSourcef(m_source, AL_ROLLOFF_FACTOR, factor);
+        AL_TRACE_ERRORS(m_tracer);
+    }
+
+    float get_rolloff() const
+    {
+        float factor = 0.0F;
+        alGetSourcef(m_source, AL_ROLLOFF_FACTOR, &factor);
+        AL_TRACE_ERRORS(m_tracer);
+
+        return factor;
+    }
+
     void set_volume(float volume_level) const
     {
         alSourcef(m_source, AL_GAIN, std::max(volume_level, 0.0F));
@@ -291,9 +306,9 @@ struct Source::Impl {
             if (m_fade_duration > m_fade_elapsed) {
                 auto const  volume_mult = static_cast<float>(m_fade_elapsed.count()) / m_fade_duration.count();
                 float const volume      = std::lerp(m_fade_start_volume, m_fade_end_volume, volume_mult);
-                set_volume_max(volume);
+                set_volume(volume);
             } else {
-                set_volume_max(m_fade_end_volume);
+                set_volume(m_fade_end_volume);
 
                 m_fade_start_volume = 1.0F;
                 m_fade_end_volume   = 1.0F;
@@ -387,6 +402,16 @@ void Source::set_velocity_3d(std::array<float, 3> const& velocity)
 void Source::set_direction_3d(std::array<float, 3> const& direction)
 {
     m_impl->set_direction_3d(direction);
+}
+
+void Source::set_rolloff(float factor)
+{
+    m_impl->set_rolloff(factor);
+}
+
+float Source::get_rolloff() const
+{
+    return m_impl->get_rolloff();
 }
 
 void Source::set_volume(float volume_level)

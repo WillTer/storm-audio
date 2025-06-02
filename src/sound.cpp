@@ -1,5 +1,6 @@
 
 #include <algorithm>
+#include <cstring>
 
 #include <storm_audio/sound.h>
 

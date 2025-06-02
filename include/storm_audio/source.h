@@ -35,6 +35,9 @@ public:
     void set_velocity_3d(std::array<float, 3> const& velocity);
     void set_direction_3d(std::array<float, 3> const& direction);
 
+    void  set_rolloff(float factor);
+    float get_rolloff() const;
+
     void  set_volume(float volume_level);
     float get_volume() const;
 
