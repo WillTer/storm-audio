@@ -75,8 +75,7 @@ void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& d
         auto const sound  = device.create_sound_stream(file.path(), flags);
         auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
-        source->fade(0.0F, 1.0F, std::chrono::milliseconds(2000));
-        source->play();
+        source->play(0.0F, 1.0F, std::chrono::milliseconds(1000));
 
         constexpr auto pause = std::chrono::milliseconds(10);
         while (source->get_state() != SourceState::Free) {
