@@ -291,6 +291,7 @@ struct Source::Impl {
     void reset_source_parameters(bool is_stereo)
     {
         m_is_looping = false;
+        m_fader      = std::nullopt;
 
         alSourcei(m_source, AL_LOOPING, AL_FALSE);
         AL_TRACE_ERRORS(m_tracer);
