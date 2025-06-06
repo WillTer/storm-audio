@@ -14,7 +14,10 @@ set(MSVC_CXX_FLAGS_DEBUG /Od)
 set(MSVC_CXX_FLAGS_RELEASE /O2)
 
 set(GNU_CXX_FLAGS_ANY)
-set(GNU_CXX_FLAGS_DEBUG -g -Og -fno-omit-frame-pointer -fsanitize=address)
+set(GNU_CXX_FLAGS_DEBUG
+    -g -O0
+    $<$<BOOL:${STORM_AUDIO_ENABLE_ASAN}>:-fno-omit-frame-pointer -fsanitize=address>
+)
 set(GNU_CXX_FLAGS_RELEASE -O3)
 
 set(MSVC_CXX_FLAGS_WARNINGS /WX /W4)
@@ -44,7 +47,7 @@ set(MSVC_LINK_FLAGS
 )
 
 set(GNU_LINK_FLAGS
-    $<$<CONFIG:Debug>:-fno-omit-frame-pointer -fsanitize=address>
+    $<$AND<$<CONFIG:Debug>,$<BOOL:${STORM_AUDIO_ENABLE_ASAN}>>:-fno-omit-frame-pointer -fsanitize=address>
 )
 
 set(STORM_LINK_FLAGS
