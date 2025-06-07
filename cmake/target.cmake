@@ -47,7 +47,7 @@ set(MSVC_LINK_FLAGS
 )
 
 set(GNU_LINK_FLAGS
-    $<$AND<$<CONFIG:Debug>,$<BOOL:${STORM_AUDIO_ENABLE_ASAN}>>:-fno-omit-frame-pointer -fsanitize=address>
+    $<$<AND:$<CONFIG:Debug>,$<BOOL:${STORM_AUDIO_ENABLE_ASAN}>>:-fno-omit-frame-pointer -fsanitize=address>
 )
 
 set(STORM_LINK_FLAGS
