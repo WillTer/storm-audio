@@ -371,8 +371,8 @@ struct Source::Impl {
             set_volume(fader.end_volume);
 
             switch (fader.target_state) {
-            case SourceState::Paused: pause();
-            case SourceState::Stopped: stop();
+            case SourceState::Paused: pause(); break;
+            case SourceState::Stopped: stop(); break;
             default: break;
             }
 
