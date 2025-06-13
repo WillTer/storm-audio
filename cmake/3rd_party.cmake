@@ -11,7 +11,6 @@ FetchContent_Declare(
     libogg
     GIT_REPOSITORY  https://github.com/xiph/ogg.git
     GIT_TAG         fa80aae9d50096160f2b56ada35527d7aee3f746
-    GIT_SHALLOW     ON
 )
 
 # Support old cmake files
@@ -20,7 +19,6 @@ FetchContent_Declare(
     libvorbis
     GIT_REPOSITORY  https://github.com/xiph/vorbis.git
     GIT_TAG         84c023699cdf023a32fa4ded32019f194afcdad0
-    GIT_SHALLOW     ON
 )
 
 if (WIN32)
@@ -37,9 +35,9 @@ add_library(storm-audio-deps INTERFACE)
 target_link_libraries(storm-audio-deps
     INTERFACE
         $<$<PLATFORM_ID:Windows>:Ogg::ogg Vorbis::vorbisfile OpenAL>
-	$<$<PLATFORM_ID:Linux>:${OGG_LIBRARIES} ${VORBISFILE_LIBRARIES} ${OPENAL_LIBRARIES}>
+        $<$<PLATFORM_ID:Linux>:${OGG_LIBRARIES} ${VORBISFILE_LIBRARIES} ${OPENAL_LIBRARIES}>
 )
 target_include_directories(storm-audio-deps
     INTERFACE
-    $<$<PLATFORM_ID:Linux>:${OGG_INCLUDE_DIRS} ${VORBISFILE_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIRS}>
+        $<$<PLATFORM_ID:Linux>:${OGG_INCLUDE_DIRS} ${VORBISFILE_INCLUDE_DIRS} ${OPENAL_INCLUDE_DIRS}>
 )
