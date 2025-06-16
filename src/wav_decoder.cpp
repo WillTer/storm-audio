@@ -1,5 +1,6 @@
 #include "wav_decoder.h"
 
+#include <cassert>
 #include <cstring>
 #include <vector>
 
@@ -46,9 +47,10 @@ size_t read_chunk(std::vector<char> const& mem, size_t const offset, T& chunk)
     return sizeof(chunk);
 }
 
-bool is_id_equals(std::string_view const& id, std::string_view const& expected)
+bool is_id_equals(char const id[4], char const  expected[4])
 {
-    if (expected.size() < 4 || id.size() < 4) { return false; }
+    assert(id != nullptr);
+    assert(expected != nullptr);
 
     return id[0] == expected[0] && id[1] == expected[1] && id[2] == expected[2] && id[3] == expected[3];
 }
@@ -56,7 +58,6 @@ bool is_id_equals(std::string_view const& id, std::string_view const& expected)
 bool parse_wave_file(std::vector<char> const& mem, WavFileData& output_data)
 {
     size_t            offset     = 0;
-    std::vector<char> audio_data = {};
 
     RiffChunk riff_chunk = {};
     offset += read_chunk(mem, offset, riff_chunk);

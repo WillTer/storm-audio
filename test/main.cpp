@@ -24,10 +24,10 @@ public:
     printf("[" #severity_text "][%s:%zd][%s] %s\n", source_file.filename().string().c_str(), line, function_name.c_str(), message.c_str())
 
         switch (severity) {
-        case DebugTracer::Severity::Trace: PRINTF_MESSAGE(TRACE); break;
-        case DebugTracer::Severity::Info: PRINTF_MESSAGE(INFO); break;
-        case DebugTracer::Severity::Warn: PRINTF_MESSAGE(WARN); break;
-        case DebugTracer::Severity::Error: PRINTF_MESSAGE(ERROR); break;
+        case Severity::Trace: PRINTF_MESSAGE(TRACE); break;
+        case Severity::Info: PRINTF_MESSAGE(INFO); break;
+        case Severity::Warn: PRINTF_MESSAGE(WARN); break;
+        case Severity::Error: PRINTF_MESSAGE(ERROR); break;
         }
     }
 };
@@ -49,7 +49,7 @@ void play_file(Device& device, Sound::Flags flags, std::filesystem::path const& 
     source->play();
 
     constexpr auto pause = std::chrono::milliseconds(10);
-    while (true) {
+    while (source->get_state() != SourceState::Free) {
         std::this_thread::sleep_for(pause);
         device.update(pause);
     }
@@ -63,7 +63,7 @@ void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path 
     source->play();
 
     constexpr auto pause = std::chrono::milliseconds(10);
-    while (true) {
+    while (source->get_state() != SourceState::Free) {
         std::this_thread::sleep_for(pause);
         device.update(pause);
     }
@@ -72,6 +72,10 @@ void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path 
 void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& dir)
 {
     for (auto const& file: std::filesystem::directory_iterator(dir)) {
+        if (file.path().extension() != ".wav" && file.path().extension() != ".ogg") { continue; }
+
+        printf("Now playing: %s\n", file.path().string().c_str());
+
         auto const sound  = device.create_sound_stream(file.path(), flags);
         auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
