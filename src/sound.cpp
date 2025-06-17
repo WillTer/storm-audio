@@ -10,13 +10,13 @@
 using namespace storm::audio;
 
 struct Sound::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags)
-        : m_tracer {tracer}
+    Impl(TraceFunction const& trace_func, std::unique_ptr<DataStream> const& stream, Flags flags)
+        : m_trace_func {trace_func}
         , m_flags {flags}
         , m_sources_lock {1}
     {
         alGenBuffers(1, &m_buffer);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_sample_rate = stream->get_sample_rate();
         m_channels    = is_flag_enabled(m_flags, Flags::Spatial3D) ? 1 : stream->get_channels();
@@ -31,13 +31,13 @@ struct Sound::Impl {
         detach_all_sources();
 
         alDeleteBuffers(1, &m_buffer);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void attach_source(unsigned source)
     {
         alSourcei(source, AL_BUFFER, m_buffer);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_sources_lock.acquire();
         m_attached_sources.push_back(source);
@@ -55,7 +55,7 @@ struct Sound::Impl {
         }
 
         alSourcei(*it, AL_BUFFER, 0);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_attached_sources.erase(it);
         m_sources_lock.release();
@@ -81,7 +81,7 @@ struct Sound::Impl {
         }
 
         alBufferData(m_buffer, m_al_format, buffer.data(), static_cast<int>(buffer.size()), m_sample_rate);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void detach_all_sources()
@@ -89,10 +89,10 @@ struct Sound::Impl {
         m_sources_lock.acquire();
         for (auto const source: m_attached_sources) {
             alSourceStop(source);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
 
             alSourcei(source, AL_BUFFER, 0);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
         }
 
         // Clear sources list, as we're not binded to them anymore
@@ -100,7 +100,7 @@ struct Sound::Impl {
         m_sources_lock.release();
     }
 
-    std::shared_ptr<DebugTracer> m_tracer;
+    TraceFunction m_trace_func;
 
     Flags m_flags;
 
@@ -116,8 +116,8 @@ struct Sound::Impl {
     std::binary_semaphore m_sources_lock;
 };
 
-Sound::Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags)
-    : m_impl {std::make_unique<Impl>(tracer, stream, flags)}
+Sound::Sound(TraceFunction const& trace_func, std::unique_ptr<DataStream> const& stream, Flags flags)
+    : m_impl {std::make_unique<Impl>(trace_func, stream, flags)}
 {
 }
 

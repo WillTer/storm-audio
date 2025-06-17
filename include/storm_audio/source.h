@@ -11,12 +11,12 @@ enum class SourceState { Free, Playing, Paused, Stopped };
 
 class Sound;
 class SoundStream;
-class DebugTracer;
+class Debugtrace_func;
 
 class Source final
 {
 public:
-    Source(std::shared_ptr<DebugTracer> const& tracer);
+    Source(TraceFunction const& trace_func);
     ~Source();
 
     void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});

@@ -4,17 +4,10 @@
 
 #include <AL/al.h>
 #include <AL/alc.h>
-#include <storm_audio/debug_tracer.h>
 
-#define AL_TRACE_ERRORS(tracer) \
-    do { \
-        if (tracer) { al_trace_errors(*(tracer), __FILE__, __LINE__, __func__); } \
-    } while (false)
+#define AL_TRACE_ERRORS(trace_func) al_trace_errors(trace_func, __FILE__, __LINE__, __func__);
 
-#define ALC_TRACE_ERRORS(tracer, device) \
-    do { \
-        if (tracer) { alc_trace_errors(*(tracer), __FILE__, __LINE__, __func__, device); } \
-    } while (false)
+#define ALC_TRACE_ERRORS(trace_func, device) alc_trace_errors(trace_func, __FILE__, __LINE__, __func__, device);
 
 constexpr std::string get_al_error_text(ALenum error)
 {
@@ -42,17 +35,18 @@ constexpr std::string get_alc_error_text(ALCenum error)
     return "Unknown";
 }
 
-inline void al_trace_errors(storm::audio::DebugTracer& tracer, std::string const& filename, int line, std::string const& function)
+inline void
+al_trace_errors(storm::audio::TraceFunction const& trace_func, std::string const& filename, int line, std::string const& function)
 {
     if (auto err = alGetError(); err != AL_NO_ERROR) {
-        tracer.trace_message(storm::audio::DebugTracer::Severity::Warn, "AL error: " + get_al_error_text(err), filename, line, function);
+        trace_func(storm::audio::MessageSeverity::Warn, "AL error: " + get_al_error_text(err), filename, line, function);
     }
 }
 
-inline void
-alc_trace_errors(storm::audio::DebugTracer& tracer, std::string const& filename, int line, std::string const& function, ALCdevice* device)
+inline void alc_trace_errors(
+    storm::audio::TraceFunction const& trace_func, std::string const& filename, int line, std::string const& function, ALCdevice* device)
 {
     if (auto err = alcGetError(device); err != ALC_NO_ERROR) {
-        tracer.trace_message(storm::audio::DebugTracer::Severity::Warn, "ALC error: " + get_alc_error_text(err), filename, line, function);
+        trace_func(storm::audio::MessageSeverity::Warn, "ALC error: " + get_alc_error_text(err), filename, line, function);
     }
 }

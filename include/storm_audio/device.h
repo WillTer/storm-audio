@@ -5,12 +5,12 @@
 
 #include "sound.h"
 #include "sound_stream.h"
+#include "trace_func.h"
 
 namespace storm::audio
 {
 
 class Source;
-class DebugTracer;
 
 constexpr size_t DEFAULT_BUFFER_COUNT        = 2;
 constexpr size_t DEFAULT_BUFFER_SAMPLE_COUNT = 2048;
@@ -22,10 +22,10 @@ public:
     enum class DistanceModel { None, Inverse, Linear, Exponent };
 
     Device(
-        std::shared_ptr<DebugTracer> const& tracer,
-        DistanceModel                       distance_model      = DistanceModel::Inverse,
-        size_t                              stream_buffer_count = DEFAULT_BUFFER_COUNT,
-        size_t                              buffer_sample_count = DEFAULT_BUFFER_SAMPLE_COUNT);
+        TraceFunction const& func                = {},
+        DistanceModel        distance_model      = DistanceModel::Inverse,
+        size_t               stream_buffer_count = DEFAULT_BUFFER_COUNT,
+        size_t               buffer_sample_count = DEFAULT_BUFFER_SAMPLE_COUNT);
     ~Device();
 
     std::shared_ptr<Sound>       create_sound(std::filesystem::path const& file_path, Sound::Flags flags);

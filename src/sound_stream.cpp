@@ -11,12 +11,12 @@ using namespace storm::audio;
 
 struct SoundStream::Impl {
     Impl(
-        std::shared_ptr<DebugTracer> const& tracer,
-        std::unique_ptr<DataStream>&&       stream,
-        Sound::Flags                        flags,
-        size_t                              stream_buffer_count,
-        size_t                              buffer_sample_count)
-        : m_tracer {tracer}
+        TraceFunction const&          trace_func,
+        std::unique_ptr<DataStream>&& stream,
+        Sound::Flags                  flags,
+        size_t                        stream_buffer_count,
+        size_t                        buffer_sample_count)
+        : m_trace_func {trace_func}
         , m_stream {std::move(stream)}
         , m_position {std::chrono::milliseconds(0)}
         , m_flags {flags}
@@ -27,7 +27,7 @@ struct SoundStream::Impl {
         m_buffers.resize(stream_buffer_count);
 
         alGenBuffers(static_cast<int>(m_buffers.size()), m_buffers.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_sample_rate = m_stream->get_sample_rate();
         m_channels    = m_stream->get_channels();
@@ -42,7 +42,7 @@ struct SoundStream::Impl {
         detach_source();
 
         alDeleteBuffers(static_cast<int>(m_buffers.size()), m_buffers.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void attach_source(unsigned source)
@@ -54,7 +54,7 @@ struct SoundStream::Impl {
         m_attached_source.store(source);
 
         alSourceQueueBuffers(source, static_cast<int>(m_buffers.size()), m_buffers.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void detach_source()
@@ -63,10 +63,10 @@ struct SoundStream::Impl {
         if (source == 0) { return; }
 
         alSourceStop(source);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         alSourcei(source, AL_BUFFER, 0);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_attached_source.store(0);
     }
@@ -97,7 +97,7 @@ struct SoundStream::Impl {
         }
 
         alBufferData(buffer, m_al_format, m_buffer_data.data(), static_cast<int>(m_buffer_data.size()), m_sample_rate);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_buffer_lock.release();
 
@@ -114,17 +114,17 @@ struct SoundStream::Impl {
 
         ALint processed = 0;
         alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         size_t updated = 0;
         for (ALint i = 0; i < processed; ++i) {
             ALuint buffer = 0;
             alSourceUnqueueBuffers(source, 1, &buffer);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
 
             if (update_buffer(buffer, is_looping)) {
                 alSourceQueueBuffers(source, 1, &buffer);
-                AL_TRACE_ERRORS(m_tracer);
+                AL_TRACE_ERRORS(m_trace_func);
                 ++updated;
             }
         }
@@ -149,8 +149,8 @@ struct SoundStream::Impl {
         return m_position;
     }
 
-    std::shared_ptr<DebugTracer> m_tracer;
-    std::unique_ptr<DataStream>  m_stream;
+    TraceFunction               m_trace_func;
+    std::unique_ptr<DataStream> m_stream;
 
     std::chrono::milliseconds m_position;
 
@@ -171,12 +171,12 @@ struct SoundStream::Impl {
 };
 
 SoundStream::SoundStream(
-    std::shared_ptr<DebugTracer> const& tracer,
-    std::unique_ptr<DataStream>&&       stream,
-    Sound::Flags                        flags,
-    size_t                              stream_buffer_count,
-    size_t                              buffer_sample_count)
-    : m_impl {std::make_unique<Impl>(tracer, std::move(stream), flags, stream_buffer_count, buffer_sample_count)}
+    TraceFunction const&          trace_func,
+    std::unique_ptr<DataStream>&& stream,
+    Sound::Flags                  flags,
+    size_t                        stream_buffer_count,
+    size_t                        buffer_sample_count)
+    : m_impl {std::make_unique<Impl>(trace_func, std::move(stream), flags, stream_buffer_count, buffer_sample_count)}
 {
 }
 

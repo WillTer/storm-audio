@@ -13,28 +13,24 @@ namespace
 
 std::atomic_bool m_is_finished = false;
 
-class Tracer: public DebugTracer
+void trace_message(
+    MessageSeverity              severity,
+    std::string const&           message,
+    std::filesystem::path const& source_file,
+    size_t                       line,
+    std::string const&           function_name)
 {
-public:
-    void trace_message(
-        Severity                     severity,
-        std::string const&           message,
-        std::filesystem::path const& source_file,
-        size_t                       line,
-        std::string const&           function_name) override
-    {
 #define PRINTF_MESSAGE(severity_text) \
     std::cout << std::format("[" #severity_text "][{}:{}][{}] {}", source_file.filename().string(), line, function_name, message) \
               << std::endl
 
-        switch (severity) {
-        case Severity::Trace: PRINTF_MESSAGE(TRACE); break;
-        case Severity::Info: PRINTF_MESSAGE(INFO); break;
-        case Severity::Warn: PRINTF_MESSAGE(WARN); break;
-        case Severity::Error: PRINTF_MESSAGE(ERROR); break;
-        }
+    switch (severity) {
+    case MessageSeverity::Trace: PRINTF_MESSAGE(TRACE); break;
+    case MessageSeverity::Info: PRINTF_MESSAGE(INFO); break;
+    case MessageSeverity::Warn: PRINTF_MESSAGE(WARN); break;
+    case MessageSeverity::Error: PRINTF_MESSAGE(ERROR); break;
     }
-};
+}
 
 void print_usage(std::string_view const& app_path)
 {
@@ -47,7 +43,7 @@ void print_usage(std::string_view const& app_path)
 
 void process_input(Source& source)
 {
-    char ch   = 0;
+    int  ch   = 0;
     bool done = false;
     while ((ch = getchar()) != 'q' && !done) {
         switch (ch) {
@@ -119,9 +115,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    auto tracer = std::make_shared<Tracer>();
-    auto device = std::make_unique<Device>(tracer, Device::DistanceModel::Inverse, 4, 512);
-
+    auto device = std::make_unique<Device>(trace_message);
     auto thread = std::thread([&device]() {
         constexpr auto pause = std::chrono::milliseconds(10);
         while (!m_is_finished.load()) {

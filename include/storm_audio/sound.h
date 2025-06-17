@@ -4,8 +4,8 @@
 #include <type_traits>
 
 #include "data_stream.h"
-#include "debug_tracer.h"
 #include "enum_flags.h"
+#include "trace_func.h"
 
 namespace storm::audio
 {
@@ -19,7 +19,7 @@ public:
         Spatial3D = 1 << 1,
     };
 
-    Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags);
+    Sound(TraceFunction const& trace_func, std::unique_ptr<DataStream> const& stream, Flags flags);
     ~Sound();
 
     Flags get_flags() const;

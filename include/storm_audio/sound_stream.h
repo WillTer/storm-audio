@@ -4,8 +4,8 @@
 #include <type_traits>
 
 #include "data_stream.h"
-#include "debug_tracer.h"
 #include "sound.h"
+#include "trace_func.h"
 
 namespace storm::audio
 {
@@ -14,11 +14,11 @@ class SoundStream final
 {
 public:
     SoundStream(
-        std::shared_ptr<DebugTracer> const& tracer,
-        std::unique_ptr<DataStream>&&       stream,
-        Sound::Flags                        flags,
-        size_t                              stream_buffer_count,
-        size_t                              buffer_sample_count);
+        TraceFunction const&          trace_func,
+        std::unique_ptr<DataStream>&& stream,
+        Sound::Flags                  flags,
+        size_t                        stream_buffer_count,
+        size_t                        buffer_sample_count);
     ~SoundStream();
 
     Sound::Flags get_flags() const;

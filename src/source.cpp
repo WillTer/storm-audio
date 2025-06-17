@@ -34,33 +34,33 @@ struct Fader {
 }  // namespace
 
 struct Source::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer)
-        : m_tracer {tracer}
+    Impl(TraceFunction const& trace_func)
+        : m_trace_func {trace_func}
         , m_is_looping {false}
         , m_is_sound_attached {false}
         , m_fader_lock {1}
         , m_sound_lock {1}
     {
         alGenSources(1, &m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     ~Impl()
     {
         alSourceStop(m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         // Unbind all buffers from source
         detach_sound();
 
         alDeleteSources(1, &m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (!m_is_sound_attached.load()) {
-            TRACE_WARN(m_tracer, "Source is empty");
+            TRACE_WARN(m_trace_func, "Source is empty");
             return;
         }
 
@@ -84,13 +84,13 @@ struct Source::Impl {
         m_fader_lock.release();
 
         alSourcePlay(m_source);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (!m_is_sound_attached.load()) {
-            TRACE_WARN(m_tracer, "Source is empty");
+            TRACE_WARN(m_trace_func, "Source is empty");
             return;
         }
 
@@ -108,7 +108,7 @@ struct Source::Impl {
             };
         } else {
             alSourcePause(m_source);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
         }
 
         m_fader_lock.release();
@@ -117,7 +117,7 @@ struct Source::Impl {
     void stop(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
         if (!m_is_sound_attached.load()) {
-            TRACE_WARN(m_tracer, "Source is empty");
+            TRACE_WARN(m_trace_func, "Source is empty");
             return;
         }
 
@@ -135,7 +135,7 @@ struct Source::Impl {
             };
         } else {
             alSourceStop(m_source);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
 
             detach_sound();
         }
@@ -149,7 +149,7 @@ struct Source::Impl {
 
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         switch (al_state) {
         case AL_INITIAL: [[fallthrough]];
@@ -163,7 +163,7 @@ struct Source::Impl {
     void set_playback_position(std::chrono::milliseconds const& pos)
     {
         if (!m_is_sound_attached.load()) {
-            TRACE_WARN(m_tracer, "Source is empty");
+            TRACE_WARN(m_trace_func, "Source is empty");
             return;
         }
 
@@ -173,14 +173,14 @@ struct Source::Impl {
             m_sound_lock.release();
         } else {
             alSourcef(m_source, AL_SEC_OFFSET, pos.count() / 1000.0F);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
         }
     }
 
     std::chrono::milliseconds get_playback_position()
     {
         if (!m_is_sound_attached.load()) {
-            TRACE_WARN(m_tracer, "Source is empty");
+            TRACE_WARN(m_trace_func, "Source is empty");
             return {};
         }
 
@@ -193,7 +193,7 @@ struct Source::Impl {
 
         ALfloat offset_s = 0;
         alGetSourcef(m_source, AL_SEC_OFFSET, &offset_s);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return start_ms + std::chrono::milliseconds(static_cast<uint64_t>(offset_s * 1000));
     }
@@ -201,44 +201,44 @@ struct Source::Impl {
     void set_min_distance(float distance) const
     {
         alSourcef(m_source, AL_REFERENCE_DISTANCE, distance);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void set_max_distance(float distance) const
     {
         alSourcef(m_source, AL_MAX_DISTANCE, distance);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void set_position_3d(std::array<float, 3> const& position) const
     {
         alSourcefv(m_source, AL_POSITION, position.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void set_velocity_3d(std::array<float, 3> const& velocity) const
     {
         alSourcefv(m_source, AL_VELOCITY, velocity.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void set_direction_3d(std::array<float, 3> const& direction) const
     {
         alSourcefv(m_source, AL_DIRECTION, direction.data());
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     void set_rolloff(float factor)
     {
         alSourcef(m_source, AL_ROLLOFF_FACTOR, factor);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     float get_rolloff() const
     {
         float factor = 0.0F;
         alGetSourcef(m_source, AL_ROLLOFF_FACTOR, &factor);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return factor;
     }
@@ -246,14 +246,14 @@ struct Source::Impl {
     void set_volume(float volume_level) const
     {
         alSourcef(m_source, AL_GAIN, std::max(volume_level, 0.0F));
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     float get_volume() const
     {
         float volume_level = 0.0F;
         alGetSourcef(m_source, AL_GAIN, &volume_level);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return volume_level;
     }
@@ -261,14 +261,14 @@ struct Source::Impl {
     void set_volume_min(float volume_min)
     {
         alSourcef(m_source, AL_MIN_GAIN, std::clamp(volume_min, 0.0F, 1.0F));
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     float get_volume_min() const
     {
         float volume_min = 0.0F;
         alGetSourcef(m_source, AL_MIN_GAIN, &volume_min);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return volume_min;
     }
@@ -276,14 +276,14 @@ struct Source::Impl {
     void set_volume_max(float volume_max)
     {
         alSourcef(m_source, AL_MAX_GAIN, std::clamp(volume_max, 0.0F, 1.0F));
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     float get_volume_max() const
     {
         float volume_max = 0.0F;
         alGetSourcef(m_source, AL_MAX_GAIN, &volume_max);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return volume_max;
     }
@@ -291,14 +291,14 @@ struct Source::Impl {
     void set_pitch(float pitch_level) const
     {
         alSourcef(m_source, AL_PITCH, std::clamp(pitch_level, 0.0F, 1.0F));
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
     }
 
     float get_pitch() const
     {
         float pitch_level = 0.0F;
         alGetSourcef(m_source, AL_PITCH, &pitch_level);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         return pitch_level;
     }
@@ -310,7 +310,7 @@ struct Source::Impl {
         m_sound_lock.acquire();
         if (std::holds_alternative<SoundPtr>(m_sound)) {
             alSourcei(m_source, AL_LOOPING, m_is_looping ? AL_TRUE : AL_FALSE);
-            AL_TRACE_ERRORS(m_tracer);
+            AL_TRACE_ERRORS(m_trace_func);
         }
         m_sound_lock.release();
     }
@@ -321,13 +321,13 @@ struct Source::Impl {
         m_fader      = std::nullopt;
 
         alSourcei(m_source, AL_LOOPING, AL_FALSE);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         alSourcei(m_source, AL_SOURCE_RELATIVE, is_stereo ? AL_TRUE : AL_FALSE);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         alSourcei(m_source, AL_ROLLOFF_FACTOR, is_stereo ? 0 : 1);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         // Reset 3D data
         set_position_3d({0, 0, -1});
@@ -351,7 +351,7 @@ struct Source::Impl {
     void detach_sound()
     {
         alSourcei(m_source, AL_BUFFER, 0);
-        AL_TRACE_ERRORS(m_tracer);
+        AL_TRACE_ERRORS(m_trace_func);
 
         m_sound_lock.acquire();
 
@@ -427,7 +427,7 @@ struct Source::Impl {
         m_fader_lock.release();
     }
 
-    std::shared_ptr<DebugTracer> m_tracer;
+    TraceFunction m_trace_func;
 
     unsigned m_source;
     bool     m_is_looping;
@@ -441,7 +441,7 @@ struct Source::Impl {
     std::binary_semaphore m_sound_lock;
 };
 
-Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
+Source::Source(TraceFunction const& trace_func) : m_impl {std::make_unique<Impl>(trace_func)} {}
 Source::~Source() = default;
 
 void Source::play(float start_volume /*= 1.0F*/, float end_volume /*= 1.0F*/, std::chrono::milliseconds const& fade_duration /*= {}*/)

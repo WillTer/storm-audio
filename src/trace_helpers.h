@@ -1,13 +1,10 @@
 #pragma once
 
-#include <storm_audio/debug_tracer.h>
+#include <storm_audio/trace_func.h>
 
-#define TRACE_MESSAGE(tracer, severity, message) \
-    do { \
-        if (tracer) { (tracer)->trace_message(severity, message, __FILE__, __LINE__, __func__); } \
-    } while (false)
+#define TRACE_MESSAGE(trace_func, severity, message) trace_func(severity, message, __FILE__, __LINE__, __func__);
 
-#define TRACE_DEBUG(tracer, message) TRACE_MESSAGE(tracer, storm::audio::DebugTracer::Severity::Trace, message)
-#define TRACE_INFO(tracer, message) TRACE_MESSAGE(tracer, storm::audio::DebugTracer::Severity::Info, message)
-#define TRACE_WARN(tracer, message) TRACE_MESSAGE(tracer, storm::audio::DebugTracer::Severity::Warn, message)
-#define TRACE_ERROR(tracer, message) TRACE_MESSAGE(tracer, storm::audio::DebugTracer::Severity::Error, message)
+#define TRACE_DEBUG(trace_func, message) TRACE_MESSAGE(trace_func, storm::audio::MessageSeverity::Trace, message)
+#define TRACE_INFO(trace_func, message) TRACE_MESSAGE(trace_func, storm::audio::MessageSeverity::Info, message)
+#define TRACE_WARN(trace_func, message) TRACE_MESSAGE(trace_func, storm::audio::MessageSeverity::Warn, message)
+#define TRACE_ERROR(trace_func, message) TRACE_MESSAGE(trace_func, storm::audio::MessageSeverity::Error, message)

@@ -13,14 +13,10 @@ using namespace storm::audio;
 namespace
 {
 
-void trace_decode_errors(std::shared_ptr<DebugTracer> const& tracer, int res)
+void trace_decode_errors(TraceFunction const& trace_func, int res)
 {
-    if (!tracer) { return; }
-
 #define TRACE_ERROR_CASE(error) \
-    case error: \
-        tracer->trace_message(storm::audio::DebugTracer::Severity::Error, "Vorbisfile read error: " #error, __FILE__, __LINE__, __func__); \
-        break
+    case error: trace_func(storm::audio::MessageSeverity::Error, "Vorbisfile read error: " #error, __FILE__, __LINE__, __func__); break
 
     switch (res) {
         TRACE_ERROR_CASE(OV_FALSE);
@@ -44,8 +40,8 @@ void trace_decode_errors(std::shared_ptr<DebugTracer> const& tracer, int res)
 }  // namespace
 
 struct OggDecoder::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer, Format format)
-        : m_tracer {tracer}
+    Impl(TraceFunction const& trace_func, Format format)
+        : m_trace_func {trace_func}
         , m_is_valid {false}
         , m_buffer_pos {std::chrono::milliseconds(0)}
         , m_channels {0}
@@ -103,7 +99,7 @@ struct OggDecoder::Impl {
 
             // Error occured
             if (res < 0) {
-                trace_decode_errors(m_tracer, res);
+                trace_decode_errors(m_trace_func, res);
                 break;
             }
 
@@ -162,7 +158,7 @@ struct OggDecoder::Impl {
         m_buffer_pos        = std::chrono::milliseconds(static_cast<int64_t>(pos_ms));
     }
 
-    std::shared_ptr<DebugTracer> m_tracer;
+    TraceFunction m_trace_func;
 
     bool m_is_valid;
 
@@ -180,7 +176,7 @@ struct OggDecoder::Impl {
     int    m_current_section;
 };
 
-OggDecoder::OggDecoder(std::shared_ptr<DebugTracer> const& tracer, Format format) : m_impl {std::make_unique<Impl>(tracer, format)} {}
+OggDecoder::OggDecoder(TraceFunction const& trace_func, Format format) : m_impl {std::make_unique<Impl>(trace_func, format)} {}
 
 OggDecoder::~OggDecoder() = default;
 
