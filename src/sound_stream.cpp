@@ -1,4 +1,7 @@
 
+#include <atomic>
+#include <semaphore>
+
 #include <storm_audio/sound_stream.h>
 
 #include "al_utils.h"
@@ -19,6 +22,7 @@ struct SoundStream::Impl {
         , m_flags {flags}
         , m_buffer_sample_count {buffer_sample_count}
         , m_attached_source {0}
+        , m_buffer_lock {1}
     {
         m_buffers.resize(stream_buffer_count);
 
@@ -46,7 +50,8 @@ struct SoundStream::Impl {
         if (source == 0) { return; }
 
         detach_source();  // detach previous source
-        m_attached_source = source;
+
+        m_attached_source.store(source);
 
         alSourceQueueBuffers(source, static_cast<int>(m_buffers.size()), m_buffers.data());
         AL_TRACE_ERRORS(m_tracer);
@@ -54,13 +59,16 @@ struct SoundStream::Impl {
 
     void detach_source()
     {
-        if (m_attached_source == 0) { return; }
+        auto const source = m_attached_source.load();
+        if (source == 0) { return; }
 
-        alSourceStop(m_attached_source);
+        alSourceStop(source);
         AL_TRACE_ERRORS(m_tracer);
 
-        alSourcei(m_attached_source, AL_BUFFER, 0);
+        alSourcei(source, AL_BUFFER, 0);
         AL_TRACE_ERRORS(m_tracer);
+
+        m_attached_source.store(0);
     }
 
     void prepare_buffer_data()
@@ -72,42 +80,50 @@ struct SoundStream::Impl {
 
     bool update_buffer(unsigned buffer, bool is_looping)
     {
+        m_buffer_lock.acquire();
+
         auto samples = m_stream->get_samples(m_buffer_data, m_buffer_sample_count);
 
-        // If nothing read and we're looping, read again, but from the start
+        // If nothing read, and we're looping, read again, but from the start
         if (samples == 0 && is_looping) {
             m_stream->seek_start();
             samples = m_stream->get_samples(m_buffer_data, m_buffer_sample_count);
         }
 
         // If still nothing read (or we're not looping), then just stop
-        if (samples == 0) { return false; }
+        if (samples == 0) {
+            m_buffer_lock.release();
+            return false;
+        }
 
         alBufferData(buffer, m_al_format, m_buffer_data.data(), static_cast<int>(m_buffer_data.size()), m_sample_rate);
         AL_TRACE_ERRORS(m_tracer);
+
+        m_buffer_lock.release();
 
         return true;
     }
 
     size_t update(bool is_looping)
     {
-        if (m_attached_source == 0) { return 0; }
+        auto const source = m_attached_source.load();
+        if (source == 0) { return 0; }
 
         // TODO: Calculate which buffer are playing now to get precise position
         m_position = m_stream->get_buffer_position();
 
         ALint processed = 0;
-        alGetSourcei(m_attached_source, AL_BUFFERS_PROCESSED, &processed);
+        alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
         AL_TRACE_ERRORS(m_tracer);
 
         size_t updated = 0;
         for (ALint i = 0; i < processed; ++i) {
             ALuint buffer = 0;
-            alSourceUnqueueBuffers(m_attached_source, 1, &buffer);
+            alSourceUnqueueBuffers(source, 1, &buffer);
             AL_TRACE_ERRORS(m_tracer);
 
             if (update_buffer(buffer, is_looping)) {
-                alSourceQueueBuffers(m_attached_source, 1, &buffer);
+                alSourceQueueBuffers(source, 1, &buffer);
                 AL_TRACE_ERRORS(m_tracer);
                 ++updated;
             }
@@ -118,7 +134,7 @@ struct SoundStream::Impl {
 
     void set_stream_buffer_position(std::chrono::milliseconds const& pos)
     {
-        unsigned source = m_attached_source;
+        auto const source = m_attached_source.load();
 
         // We need to detach buffers from source to update the ones that are in-use
         detach_source();
@@ -149,7 +165,9 @@ struct SoundStream::Impl {
     std::vector<char> m_buffer_data;
 
     std::vector<unsigned> m_buffers;
-    unsigned              m_attached_source;
+    std::atomic<unsigned> m_attached_source;
+
+    std::binary_semaphore m_buffer_lock;
 };
 
 SoundStream::SoundStream(

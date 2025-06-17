@@ -1,4 +1,4 @@
-name: Ubuntu 22.04
+name: Ubuntu Latest
 
 on:
   push:
@@ -29,23 +29,23 @@ jobs:
   build-linux:
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         configuration: [Debug]
-    name: 'Ubuntu 22.04 [${{ matrix.configuration}}]'
+    name: 'Ubuntu Latest [${{ matrix.configuration}}]'
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: 'recursive'
     - name: Install libs
       run: |
-        sudo apt-get update && sudo apt-get install clang-15 libvorbis-dev libogg-dev libopenal-dev
+        sudo apt-get update && sudo apt-get install clang-18 libvorbis-dev libogg-dev libopenal-dev
     - name: Configure with CMake
       run: |
-        export CC=clang-15
-        export CXX=clang++-15
+        export CC=clang-18
+        export CXX=clang++-18
         ${CXX} --version
         cmake -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.configuration}} -S . -B build/${{ matrix.configuration }}
     - name: Build
@@ -53,7 +53,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: storm-engine.linux.${{ matrix.configuration }}
+        name: storm-audio.linux.${{ matrix.configuration }}
         path: |
           build/${{ matrix.configuration }}/test
           !build/${{ matrix.configuration }}/test/CMakeFiles

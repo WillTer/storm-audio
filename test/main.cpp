@@ -1,5 +1,6 @@
 #include <chrono>
-#include <cstdio>
+#include <format>
+#include <iostream>
 #include <thread>
 
 #include <storm_audio/device.h>
@@ -9,6 +10,8 @@ using namespace storm::audio;
 
 namespace
 {
+
+std::atomic_bool m_is_finished = false;
 
 class Tracer: public DebugTracer
 {
@@ -21,7 +24,8 @@ public:
         std::string const&           function_name) override
     {
 #define PRINTF_MESSAGE(severity_text) \
-    printf("[" #severity_text "][%s:%zd][%s] %s\n", source_file.filename().string().c_str(), line, function_name.c_str(), message.c_str())
+    std::cout << std::format("[" #severity_text "][{}:{}][{}] {}", source_file.filename().string(), line, function_name, message) \
+              << std::endl
 
         switch (severity) {
         case Severity::Trace: PRINTF_MESSAGE(TRACE); break;
@@ -34,11 +38,35 @@ public:
 
 void print_usage(std::string_view const& app_path)
 {
-    printf("Usage: %s <option> <path>\n", app_path.data());
-    printf("Options:\n");
-    printf("\t--file\t\tPlay single file as whole\n");
-    printf("\t--file-stream\tPlay single file as stream\n");
-    printf("\t--dir\t\tPlay all files in directory as stream (non-recursive)\n");
+    std::cout << std::format("Usage: {} <option> <path>", app_path) << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "\t--file\t\tPlay single file as whole" << std::endl;
+    std::cout << "\t--file-stream\tPlay single file as stream" << std::endl;
+    std::cout << "\t--dir\t\tPlay all files in directory as stream (non-recursive)" << std::endl;
+}
+
+void process_input(Source& source)
+{
+    char ch   = 0;
+    bool done = false;
+    while ((ch = getchar()) != 'q' && !done) {
+        switch (ch) {
+        case 'p':  // Pause/Play
+            if (source.get_state() == SourceState::Playing) {
+                source.pause();
+            } else if (source.get_state() == SourceState::Paused) {
+                source.play();
+            }
+            break;
+        case 'n':  // Next
+            source.stop();
+            done = true;
+            break;
+        default: break;
+        }
+    }
+
+    if (ch == 'q') { m_is_finished.store(true); }  // Quit
 }
 
 void play_file(Device& device, Sound::Flags flags, std::filesystem::path const& file)
@@ -48,11 +76,8 @@ void play_file(Device& device, Sound::Flags flags, std::filesystem::path const& 
     source->set_looping(true);
     source->play();
 
-    constexpr auto pause = std::chrono::milliseconds(10);
-    while (source->get_state() != SourceState::Free) {
-        std::this_thread::sleep_for(pause);
-        device.update(pause);
-    }
+    process_input(*source);
+    m_is_finished.store(true);
 }
 
 void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path const& file)
@@ -62,11 +87,8 @@ void play_file_stream(Device& device, Sound::Flags flags, std::filesystem::path 
     source->set_looping(true);
     source->play();
 
-    constexpr auto pause = std::chrono::milliseconds(10);
-    while (source->get_state() != SourceState::Free) {
-        std::this_thread::sleep_for(pause);
-        device.update(pause);
-    }
+    process_input(*source);
+    m_is_finished.store(true);
 }
 
 void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& dir)
@@ -74,19 +96,18 @@ void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& d
     for (auto const& file: std::filesystem::directory_iterator(dir)) {
         if (file.path().extension() != ".wav" && file.path().extension() != ".ogg") { continue; }
 
-        printf("Now playing: %s\n", file.path().string().c_str());
+        std::cout << std::format("Now playing: {}", file.path().string()) << std::endl;
 
         auto const sound  = device.create_sound_stream(file.path(), flags);
         auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
         source->play(0.0F, 1.0F, std::chrono::milliseconds(1000));
 
-        constexpr auto pause = std::chrono::milliseconds(10);
-        while (source->get_state() != SourceState::Free) {
-            std::this_thread::sleep_for(pause);
-            device.update(pause);
-        }
+        process_input(*source);
+        if (m_is_finished.load()) { return; }
     }
+
+    m_is_finished.store(true);
 }
 
 }  // namespace
@@ -99,7 +120,15 @@ int main(int argc, char** argv)
     }
 
     auto tracer = std::make_shared<Tracer>();
-    auto device = std::make_unique<Device>(tracer);
+    auto device = std::make_unique<Device>(tracer, Device::DistanceModel::Inverse, 4, 512);
+
+    auto thread = std::thread([&device]() {
+        constexpr auto pause = std::chrono::milliseconds(10);
+        while (!m_is_finished.load()) {
+            std::this_thread::sleep_for(pause);
+            device->update(pause);
+        }
+    });
 
     if (std::string_view(argv[1]) == "--file") {
         play_file(*device, Sound::Flags::Stereo2D, argv[2]);
@@ -111,6 +140,8 @@ int main(int argc, char** argv)
         print_usage(argv[0]);
         return -1;
     }
+
+    thread.join();
 
     return 0;
 }

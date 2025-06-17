@@ -3,6 +3,8 @@
 #include <cctype>
 #include <cstring>
 #include <vector>
+#include <format>
+#include <ranges>
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -23,7 +25,7 @@ std::unique_ptr<DataStream> create_compatible_stream(
     std::shared_ptr<DebugTracer> const& tracer, std::filesystem::path const& file_path, DataStream::Format output_format)
 {
     std::string ext = file_path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    std::ranges::transform(ext, ext.begin(), [](unsigned char const ch) { return static_cast<char>(std::tolower(ch)); });
 
     if (ext == ".ogg") { return std::make_unique<OggDecoder>(tracer, output_format); }
     if (ext == ".wav") { return std::make_unique<WavDecoder>(); }
@@ -140,7 +142,7 @@ struct Device::Impl {
     std::shared_ptr<Source> get_free_source()
     {
         auto const free_source =
-            std::find_if(m_sources.begin(), m_sources.end(), [](auto const& source) { return source->get_state() == SourceState::Free; });
+            std::ranges::find_if(m_sources, [](auto const& source) { return source->get_state() == SourceState::Free; });
 
         return free_source != m_sources.end() ? *free_source : create_source();
     }
@@ -148,7 +150,7 @@ struct Device::Impl {
     std::shared_ptr<Source> create_source()
     {
         m_sources.push_back(std::make_shared<Source>(m_tracer));
-        TRACE_INFO(m_tracer, "Add new audio source (current sources count: " + std::to_string(m_sources.size()) + ")");
+        TRACE_INFO(m_tracer, std::format("Add new audio source (current sources count: {})", m_sources.size()));
         return m_sources.back();
     }
 

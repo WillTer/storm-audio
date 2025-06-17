@@ -1,6 +1,6 @@
-
 #include <algorithm>
 #include <cstring>
+#include <semaphore>
 
 #include <storm_audio/sound.h>
 
@@ -13,6 +13,7 @@ struct Sound::Impl {
     Impl(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags)
         : m_tracer {tracer}
         , m_flags {flags}
+        , m_sources_lock {1}
     {
         alGenBuffers(1, &m_buffer);
         AL_TRACE_ERRORS(m_tracer);
@@ -38,19 +39,26 @@ struct Sound::Impl {
         alSourcei(source, AL_BUFFER, m_buffer);
         AL_TRACE_ERRORS(m_tracer);
 
+        m_sources_lock.acquire();
         m_attached_sources.push_back(source);
+        m_sources_lock.release();
     }
 
     void detach_source(unsigned source)
     {
+        m_sources_lock.acquire();
         auto it = std::find_if(m_attached_sources.begin(), m_attached_sources.end(), [&source](unsigned const s) { return s == source; });
 
-        if (it == m_attached_sources.end()) { return; }
+        if (it == m_attached_sources.end()) {
+            m_sources_lock.release();
+            return;
+        }
 
         alSourcei(*it, AL_BUFFER, 0);
         AL_TRACE_ERRORS(m_tracer);
 
         m_attached_sources.erase(it);
+        m_sources_lock.release();
     }
 
     void prepare_buffer_data(std::unique_ptr<DataStream> const& stream, int pcm_channels)
@@ -78,6 +86,7 @@ struct Sound::Impl {
 
     void detach_all_sources()
     {
+        m_sources_lock.acquire();
         for (auto const source: m_attached_sources) {
             alSourceStop(source);
             AL_TRACE_ERRORS(m_tracer);
@@ -88,6 +97,7 @@ struct Sound::Impl {
 
         // Clear sources list, as we're not binded to them anymore
         m_attached_sources.clear();
+        m_sources_lock.release();
     }
 
     std::shared_ptr<DebugTracer> m_tracer;
@@ -102,6 +112,8 @@ struct Sound::Impl {
 
     unsigned              m_buffer;
     std::vector<unsigned> m_attached_sources;
+
+    std::binary_semaphore m_sources_lock;
 };
 
 Sound::Sound(std::shared_ptr<DebugTracer> const& tracer, std::unique_ptr<DataStream> const& stream, Flags flags)

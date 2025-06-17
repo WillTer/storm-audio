@@ -1,7 +1,9 @@
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <optional>
+#include <semaphore>
 #include <variant>
 
 #include <storm_audio/sound.h>
@@ -32,7 +34,12 @@ struct Fader {
 }  // namespace
 
 struct Source::Impl {
-    Impl(std::shared_ptr<DebugTracer> const& tracer) : m_tracer {tracer}, m_is_looping {false}
+    Impl(std::shared_ptr<DebugTracer> const& tracer)
+        : m_tracer {tracer}
+        , m_is_looping {false}
+        , m_is_sound_attached {false}
+        , m_fader_lock {1}
+        , m_sound_lock {1}
     {
         alGenSources(1, &m_source);
         AL_TRACE_ERRORS(m_tracer);
@@ -52,10 +59,12 @@ struct Source::Impl {
 
     void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
+        if (!m_is_sound_attached.load()) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
+
+        m_fader_lock.acquire();
 
         if (fade_duration.count() > 0) {
             set_volume(start_volume);
@@ -72,16 +81,20 @@ struct Source::Impl {
             set_volume(end_volume);
         }
 
+        m_fader_lock.release();
+
         alSourcePlay(m_source);
         AL_TRACE_ERRORS(m_tracer);
     }
 
     void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
+        if (!m_is_sound_attached.load()) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
+
+        m_fader_lock.acquire();
 
         if (fade_duration.count() > 0) {
             set_volume(start_volume);
@@ -97,14 +110,18 @@ struct Source::Impl {
             alSourcePause(m_source);
             AL_TRACE_ERRORS(m_tracer);
         }
+
+        m_fader_lock.release();
     }
 
     void stop(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {})
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
+        if (!m_is_sound_attached.load()) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
+
+        m_fader_lock.acquire();
 
         if (fade_duration.count() > 0) {
             set_volume(start_volume);
@@ -122,11 +139,13 @@ struct Source::Impl {
 
             detach_sound();
         }
+
+        m_fader_lock.release();
     }
 
     SourceState get_state() const
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) { return SourceState::Free; }
+        if (!m_is_sound_attached.load()) { return SourceState::Free; }
 
         ALint al_state = 0;
         alGetSourcei(m_source, AL_SOURCE_STATE, &al_state);
@@ -141,30 +160,36 @@ struct Source::Impl {
         }
     }
 
-    void set_playback_position(std::chrono::milliseconds const& pos) const
+    void set_playback_position(std::chrono::milliseconds const& pos)
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
+        if (!m_is_sound_attached.load()) {
             TRACE_WARN(m_tracer, "Source is empty");
             return;
         }
 
         if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            m_sound_lock.acquire();
             std::get<SoundStreamPtr>(m_sound)->set_stream_buffer_position(pos);
+            m_sound_lock.release();
         } else {
             alSourcef(m_source, AL_SEC_OFFSET, pos.count() / 1000.0F);
             AL_TRACE_ERRORS(m_tracer);
         }
     }
 
-    std::chrono::milliseconds get_playback_position() const
+    std::chrono::milliseconds get_playback_position()
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) {
+        if (!m_is_sound_attached.load()) {
             TRACE_WARN(m_tracer, "Source is empty");
             return {};
         }
 
         auto start_ms = std::chrono::milliseconds(0);
-        if (std::holds_alternative<SoundStreamPtr>(m_sound)) { start_ms = std::get<SoundStreamPtr>(m_sound)->get_stream_buffer_position(); }
+        if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            m_sound_lock.acquire();
+            start_ms = std::get<SoundStreamPtr>(m_sound)->get_stream_buffer_position();
+            m_sound_lock.release();
+        }
 
         ALfloat offset_s = 0;
         alGetSourcef(m_source, AL_SEC_OFFSET, &offset_s);
@@ -282,10 +307,12 @@ struct Source::Impl {
     {
         m_is_looping = flag;
 
+        m_sound_lock.acquire();
         if (std::holds_alternative<SoundPtr>(m_sound)) {
             alSourcei(m_source, AL_LOOPING, m_is_looping ? AL_TRUE : AL_FALSE);
             AL_TRACE_ERRORS(m_tracer);
         }
+        m_sound_lock.release();
     }
 
     void reset_source_parameters(bool is_stereo)
@@ -311,16 +338,22 @@ struct Source::Impl {
     template <typename T>
     void attach(T const& sound)
     {
+        m_sound_lock.acquire();
+
         this->m_sound = sound;
         sound->attach_source(m_source);
-
+        m_is_sound_attached.store(true);
         reset_source_parameters(is_flag_enabled(sound->get_flags(), Sound::Flags::Stereo2D));
+
+        m_sound_lock.release();
     }
 
     void detach_sound()
     {
         alSourcei(m_source, AL_BUFFER, 0);
         AL_TRACE_ERRORS(m_tracer);
+
+        m_sound_lock.acquire();
 
         if (std::holds_alternative<SoundPtr>(m_sound)) {
             std::get<SoundPtr>(m_sound)->detach_source(m_source);
@@ -329,11 +362,14 @@ struct Source::Impl {
         }
 
         m_sound = nullptr;
+        m_is_sound_attached.store(false);
+
+        m_sound_lock.release();
     }
 
     void update(std::chrono::milliseconds const& elapsed)
     {
-        if (std::holds_alternative<std::nullptr_t>(m_sound)) { return; }
+        if (!m_is_sound_attached.load()) { return; }
 
         auto const state = get_state();
         if (state == SourceState::Paused) { return; }
@@ -341,10 +377,14 @@ struct Source::Impl {
         process_fader(elapsed);
 
         if (std::holds_alternative<SoundStreamPtr>(m_sound)) {
+            if (!m_sound_lock.try_acquire()) { return; }  // Do not lock on update
+
             auto const updated = std::get<SoundStreamPtr>(m_sound)->update(m_is_looping);
+            m_sound_lock.release();
+
             if (state == SourceState::Playing) { return; }
 
-            // If sound is existing and we have data for it, then it's wasn't stopped by a program
+            // If sound is existing, and we have data for it, then it wasn't stopped by a program
             // but by a lack of buffer data (because of lag or something like that), so continue to play it
             if (updated > 0) {
                 play();
@@ -358,7 +398,12 @@ struct Source::Impl {
 
     void process_fader(std::chrono::milliseconds const& elapsed)
     {
-        if (!m_fader.has_value()) { return; }
+        m_fader_lock.acquire();
+
+        if (!m_fader.has_value()) {
+            m_fader_lock.release();
+            return;
+        }
 
         auto& fader = m_fader.value();
         fader.elapsed += elapsed;
@@ -378,6 +423,8 @@ struct Source::Impl {
 
             m_fader = std::nullopt;
         }
+
+        m_fader_lock.release();
     }
 
     std::shared_ptr<DebugTracer> m_tracer;
@@ -388,6 +435,10 @@ struct Source::Impl {
     std::variant<std::nullptr_t, SoundPtr, SoundStreamPtr> m_sound;
 
     std::optional<Fader> m_fader;
+
+    std::atomic_bool      m_is_sound_attached;
+    std::binary_semaphore m_fader_lock;
+    std::binary_semaphore m_sound_lock;
 };
 
 Source::Source(std::shared_ptr<DebugTracer> const& tracer) : m_impl {std::make_unique<Impl>(tracer)} {}
