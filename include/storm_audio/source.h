@@ -19,9 +19,13 @@ public:
     Source(TraceFunction const& trace_func);
     ~Source();
 
-    void play(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
-    void pause(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
-    void stop(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
+    void play();
+    void pause();
+    void stop();
+
+    void play_with_fade(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
+    void pause_with_fade(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
+    void stop_with_fade(float start_volume = 1.0F, float end_volume = 1.0F, std::chrono::milliseconds const& fade_duration = {});
 
     SourceState get_state() const;
 

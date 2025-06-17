@@ -97,7 +97,7 @@ void play_dir(Device& device, Sound::Flags flags, std::filesystem::path const& d
         auto const sound  = device.create_sound_stream(file.path(), flags);
         auto const source = device.attach_sound_stream(sound);
         source->set_looping(false);
-        source->play(0.0F, 1.0F, std::chrono::milliseconds(1000));
+        source->play_with_fade(0.0F, 1.0F, std::chrono::milliseconds(1000));
 
         process_input(*source);
         if (m_is_finished.load()) { return; }
