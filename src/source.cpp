@@ -38,6 +38,7 @@ struct Source::Impl {
         : m_trace_func {trace_func}
         , m_is_looping {false}
         , m_is_sound_attached {false}
+        , m_is_playing_started {false}
         , m_fader_lock {1}
         , m_sound_lock {1}
     {
@@ -66,6 +67,8 @@ struct Source::Impl {
 
         alSourcePlay(m_source);
         AL_TRACE_ERRORS(m_trace_func);
+
+        m_is_playing_started.store(true);
     }
 
     void pause()
@@ -77,6 +80,8 @@ struct Source::Impl {
 
         alSourcePause(m_source);
         AL_TRACE_ERRORS(m_trace_func);
+
+        m_is_playing_started.store(true);
     }
 
     void stop()
@@ -166,7 +171,9 @@ struct Source::Impl {
         case AL_INITIAL: [[fallthrough]];
         case AL_PAUSED: return SourceState::Paused;
         case AL_PLAYING: return SourceState::Playing;
-        case AL_STOPPED: return SourceState::Stopped;
+        case AL_STOPPED:
+            return m_is_playing_started.load() ? SourceState::Stopped
+                                               : SourceState::Paused;  // If playing is not started, then pretend we're in initial state
         default: return SourceState::Free;
         }
     }
@@ -329,6 +336,7 @@ struct Source::Impl {
     void reset_source_parameters(bool is_stereo)
     {
         m_is_looping = false;
+        m_is_playing_started.store(false);
 
         m_fader_lock.acquire();
         m_fader = std::nullopt;
@@ -453,6 +461,7 @@ struct Source::Impl {
     std::optional<Fader> m_fader;
 
     std::atomic_bool      m_is_sound_attached;
+    std::atomic_bool      m_is_playing_started;
     std::binary_semaphore m_fader_lock;
     std::binary_semaphore m_sound_lock;
 };
