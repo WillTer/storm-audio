@@ -119,7 +119,7 @@ function(cxx_library)
         ${CMAKE_CURRENT_LIST_DIR}/*.rc
     )
 
-    if (NOT ${LIB_TARGET_TYPE})
+    if (NOT DEFINED LIB_TARGET_TYPE)
         set(LIB_TARGET_TYPE STATIC)
     endif()
 
